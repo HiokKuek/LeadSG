@@ -25,12 +25,14 @@ Copy `.env.example` to `.env.local` for local development.
 Required:
 
 - `DATABASE_URL`
+- `ACRA_API_KEY`
 
-Optional ETL discovery inputs:
+Optional ETL runtime controls:
 
-- `ACRA_DATASET_METADATA_URL` (metadata endpoint at `api-open.data.gov.sg`)
-- `ACRA_CHILD_DATASET_URLS` (comma-separated list of A-Z child CSV URLs)
-- `ACRA_CHILD_DATASET_URL_TEMPLATE` (template containing `{letter}`)
+- `ACRA_ENTITY_STATUS_FILTER` (comma-separated, defaults to `Live`)
+- `ACRA_POLL_RETRIES` (defaults to `10`)
+- `ACRA_POLL_WAIT_SECS` (defaults to `6`)
+- `ACRA_RATE_LIMIT_DELAY` (defaults to `13.0`)
 
 `SEARCH_LIMIT` defaults to `100`.
 
@@ -69,7 +71,14 @@ Weekly ETL workflow: `.github/workflows/acra-etl.yml`
 GitHub Secrets to set:
 
 - `DATABASE_URL`
-- `ACRA_DATASET_METADATA_URL` or `ACRA_CHILD_DATASET_URLS` or `ACRA_CHILD_DATASET_URL_TEMPLATE`
+- `ACRA_API_KEY`
+
+Optional GitHub Secrets (override script defaults if set):
+
+- `ACRA_ENTITY_STATUS_FILTER`
+- `ACRA_POLL_RETRIES`
+- `ACRA_POLL_WAIT_SECS`
+- `ACRA_RATE_LIMIT_DELAY`
 
 ## Deploy Notes
 
