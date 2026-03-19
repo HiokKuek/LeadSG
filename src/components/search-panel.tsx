@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,54 @@ type SearchResponse = {
 
 const ssicParser = parseAsString.withDefault("");
 const pageParser = parseAsInteger.withDefault(1);
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const SEARCH_CACHE_PREFIX = "leadsg:search:";
+const SUMMARY_CACHE_KEY = "leadsg:summary";
+
+type CachedSearchPayload = {
+  payload: SearchResponse;
+  cachedAt: number;
+};
+
+type CachedSummaryPayload = {
+  liveCompanies: number;
+  lastUpdatedAt: string | null;
+  cachedAt: number;
+};
+
+const isFresh = (cachedAt: number) => Date.now() - cachedAt < CACHE_TTL_MS;
+
+function getSearchCacheKey(ssic: string, page: number) {
+  return `${SEARCH_CACHE_PREFIX}${ssic}:${page}`;
+}
+
+function readSessionStorage<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionStorage<T>(key: string, value: T): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    return;
+  }
+}
 
 export function SearchPanel() {
   const [ssic, setSsic] = useQueryState("ssic", ssicParser);
@@ -41,16 +89,83 @@ export function SearchPanel() {
   const [totalMatching, setTotalMatching] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(false);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeSsicRef = useRef("");
+  const rowCountRef = useRef(0);
 
   const normalizedSsic = useMemo(() => ssic.trim(), [ssic]);
   const isValidSsic = /^\d{5}$/.test(normalizedSsic);
+
+  const applyPayload = useCallback((payload: SearchResponse) => {
+    setRows(payload.data);
+    rowCountRef.current = payload.data.length;
+    setTotalLiveCompanies(payload.totals.liveCompanies);
+    setLastUpdatedAt(payload.totals.lastUpdatedAt);
+    setTotalMatching(payload.pagination.totalMatching);
+    setTotalPages(payload.pagination.totalPages);
+    setPageSize(payload.pagination.pageSize);
+  }, []);
+
+  const upsertSummaryCache = useCallback((
+    liveCompanies: number,
+    lastUpdatedAtValue: string | null,
+  ) => {
+    writeSessionStorage<CachedSummaryPayload>(SUMMARY_CACHE_KEY, {
+      liveCompanies,
+      lastUpdatedAt: lastUpdatedAtValue,
+      cachedAt: Date.now(),
+    });
+  }, []);
+
+  const prefetchPage = useCallback(async (
+    ssicValue: string,
+    pageToPrefetch: number,
+    maxPage: number,
+  ) => {
+    if (pageToPrefetch < 1 || pageToPrefetch > maxPage) {
+      return;
+    }
+
+    const cacheKey = getSearchCacheKey(ssicValue, pageToPrefetch);
+    const cached = readSessionStorage<CachedSearchPayload>(cacheKey);
+    if (cached && isFresh(cached.cachedAt)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/search?ssic=${encodeURIComponent(ssicValue)}&page=${pageToPrefetch}`,
+      );
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as SearchResponse;
+      writeSessionStorage<CachedSearchPayload>(cacheKey, {
+        payload,
+        cachedAt: Date.now(),
+      });
+      upsertSummaryCache(payload.totals.liveCompanies, payload.totals.lastUpdatedAt);
+    } catch {
+      return;
+    }
+  }, [upsertSummaryCache]);
 
   useEffect(() => {
     const controller = new AbortController();
 
     const fetchTotals = async () => {
+      const cachedSummary = readSessionStorage<CachedSummaryPayload>(
+        SUMMARY_CACHE_KEY,
+      );
+      if (cachedSummary && isFresh(cachedSummary.cachedAt)) {
+        setTotalLiveCompanies(cachedSummary.liveCompanies);
+        setLastUpdatedAt(cachedSummary.lastUpdatedAt);
+        return;
+      }
+
       try {
         const response = await fetch("/api/search", {
           signal: controller.signal,
@@ -63,6 +178,7 @@ export function SearchPanel() {
         const payload = (await response.json()) as SearchResponse;
         setTotalLiveCompanies(payload.totals.liveCompanies);
         setLastUpdatedAt(payload.totals.lastUpdatedAt);
+        upsertSummaryCache(payload.totals.liveCompanies, payload.totals.lastUpdatedAt);
       } catch (fetchError) {
         if ((fetchError as Error).name === "AbortError") {
           return;
@@ -75,7 +191,7 @@ export function SearchPanel() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [upsertSummaryCache]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -83,12 +199,36 @@ export function SearchPanel() {
     const runSearch = async () => {
       if (!isValidSsic) {
         setRows([]);
+        rowCountRef.current = 0;
         setTotalMatching(0);
         setTotalPages(0);
+        activeSsicRef.current = "";
+        setIsLoadingInitial(false);
+        setIsLoadingPage(false);
         return;
       }
 
-      setIsLoading(true);
+      const searchCacheKey = getSearchCacheKey(normalizedSsic, page);
+      const cached = readSessionStorage<CachedSearchPayload>(searchCacheKey);
+      if (cached && isFresh(cached.cachedAt)) {
+        applyPayload(cached.payload);
+        activeSsicRef.current = normalizedSsic;
+        setError(null);
+        if (cached.payload.pagination.page !== page) {
+          void setPage(cached.payload.pagination.page);
+        }
+        void prefetchPage(
+          normalizedSsic,
+          cached.payload.pagination.page + 1,
+          cached.payload.pagination.totalPages,
+        );
+        return;
+      }
+
+      const isPageTransition =
+        activeSsicRef.current === normalizedSsic && rowCountRef.current > 0;
+      setIsLoadingInitial(!isPageTransition);
+      setIsLoadingPage(isPageTransition);
       setError(null);
 
       try {
@@ -105,26 +245,35 @@ export function SearchPanel() {
         }
 
         const payload = (await response.json()) as SearchResponse;
-        setRows(payload.data);
-        setTotalLiveCompanies(payload.totals.liveCompanies);
-        setLastUpdatedAt(payload.totals.lastUpdatedAt);
-        setTotalMatching(payload.pagination.totalMatching);
-        setTotalPages(payload.pagination.totalPages);
-        setPageSize(payload.pagination.pageSize);
+        applyPayload(payload);
+        activeSsicRef.current = normalizedSsic;
+        writeSessionStorage<CachedSearchPayload>(searchCacheKey, {
+          payload,
+          cachedAt: Date.now(),
+        });
+        upsertSummaryCache(payload.totals.liveCompanies, payload.totals.lastUpdatedAt);
 
         if (payload.pagination.page !== page) {
           void setPage(payload.pagination.page);
         }
+        void prefetchPage(
+          normalizedSsic,
+          payload.pagination.page + 1,
+          payload.pagination.totalPages,
+        );
       } catch (fetchError) {
         if ((fetchError as Error).name === "AbortError") {
           return;
         }
         setRows([]);
+        rowCountRef.current = 0;
         setTotalMatching(0);
         setTotalPages(0);
+        activeSsicRef.current = "";
         setError((fetchError as Error).message);
       } finally {
-        setIsLoading(false);
+        setIsLoadingInitial(false);
+        setIsLoadingPage(false);
       }
     };
 
@@ -133,7 +282,7 @@ export function SearchPanel() {
     return () => {
       controller.abort();
     };
-  }, [isValidSsic, normalizedSsic, page, setPage]);
+  }, [applyPayload, isValidSsic, normalizedSsic, page, prefetchPage, setPage, upsertSummaryCache]);
 
   const displayRows = isValidSsic ? rows : [];
   const startRow = totalMatching === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -186,7 +335,7 @@ export function SearchPanel() {
         </div>
       </div>
 
-      <div className="w-full rounded-xl border border-zinc-200 bg-white">
+      <div className="relative w-full rounded-xl border border-zinc-200 bg-white">
         <Table>
           <TableHeader>
             <TableRow>
@@ -197,7 +346,7 @@ export function SearchPanel() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading
+            {isLoadingInitial
               ? Array.from({ length: 8 }).map((_, index) => (
                   <TableRow key={`skeleton-${index}`}>
                     <TableCell>
@@ -216,7 +365,7 @@ export function SearchPanel() {
                 ))
               : null}
 
-            {!isLoading && displayRows.length > 0
+            {!isLoadingInitial && displayRows.length > 0
               ? displayRows.map((row) => (
                   <TableRow key={`${row.uen}-${row.entityName}`}>
                     <TableCell className="font-mono text-xs text-zinc-700">
@@ -229,7 +378,7 @@ export function SearchPanel() {
                 ))
               : null}
 
-            {!isLoading && displayRows.length === 0 ? (
+            {!isLoadingInitial && displayRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="py-10 text-center text-zinc-500">
                   {displayMessage}
@@ -238,6 +387,14 @@ export function SearchPanel() {
             ) : null}
           </TableBody>
         </Table>
+        {isLoadingPage ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/55">
+            <div className="flex items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700" />
+              Loading page…
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {isValidSsic && totalPages > 0 ? (
@@ -245,7 +402,7 @@ export function SearchPanel() {
           <button
             type="button"
             onClick={() => void setPage(Math.max(1, page - 1))}
-            disabled={isLoading || page <= 1}
+            disabled={isLoadingInitial || isLoadingPage || page <= 1}
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Previous
@@ -256,7 +413,7 @@ export function SearchPanel() {
           <button
             type="button"
             onClick={() => void setPage(Math.min(totalPages, page + 1))}
-            disabled={isLoading || page >= totalPages}
+            disabled={isLoadingInitial || isLoadingPage || page >= totalPages}
             className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Next

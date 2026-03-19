@@ -9,6 +9,9 @@ import type { EntitySearchResult } from "@/lib/types";
 const ssicSchema = z.string().regex(/^\d{5}$/);
 const pageSchema = z.coerce.number().int().min(1);
 const PAGE_SIZE = 50;
+const RESPONSE_HEADERS = {
+  "Cache-Control": "public, max-age=30, stale-while-revalidate=120",
+};
 
 type SearchResponse = {
   data: EntitySearchResult[];
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
   if (!parsedPage.success) {
     return NextResponse.json(
       { error: "Invalid page. Expected a positive integer." },
-      { status: 400 },
+      { status: 400, headers: RESPONSE_HEADERS },
     );
   }
 
@@ -71,7 +74,7 @@ export async function GET(request: NextRequest) {
         liveCompanies,
         lastUpdatedAt,
       },
-    });
+    }, { headers: RESPONSE_HEADERS });
   }
 
   const parsed = ssicSchema.safeParse(query);
@@ -79,7 +82,7 @@ export async function GET(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid SSIC code. Expected exactly 5 digits." },
-      { status: 400 },
+      { status: 400, headers: RESPONSE_HEADERS },
     );
   }
 
@@ -121,5 +124,5 @@ export async function GET(request: NextRequest) {
       liveCompanies,
       lastUpdatedAt,
     },
-  });
+  }, { headers: RESPONSE_HEADERS });
 }
