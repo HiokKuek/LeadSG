@@ -1,10 +1,10 @@
-# ACRA Data Mirror & SSIC Search Tool - Project Summary
+# LeadSG 📞 - Project Summary
 
 ## Core Objective
 Build a high-performance search tool allowing users to query Singapore companies by SSIC code with:
 - Zero-downtime ETL using blue-green table swapping
 - Type-safe Next.js App Router backend
-- Minimalist Tailwind v4 frontend with URL-synced search
+- Minimalist Tailwind v4 frontend with URL-synced search and smooth pagination
 - Weekly automated data updates via GitHub Actions
 
 ---
@@ -14,19 +14,21 @@ Build a high-performance search tool allowing users to query Singapore companies
 ### Frontend
 - **Framework**: Next.js 16 (App Router), React 19.2.4, TypeScript 5
 - **Styling**: Tailwind CSS v4, custom shadcn-style components
-- **State**: nuqs 2.8.9 for URL query sync (e.g., `?ssic=62011`)
+- **State**: nuqs 2.8.9 for URL query sync (`?ssic=62011&page=2`)
 - **Components**: `SearchPanel` (client), Suspense boundary required (Next.js 16 quirk)
+- **UX**: Pagination overlay loader, session cache + page prefetch for faster next/prev
 
 ### Backend API
-- **Route**: `GET /api/search?ssic=XXXXX`
+- **Route**: `GET /api/search?ssic=XXXXX&page=N`
 - **ORM**: Drizzle 0.45.1 with lazy PostgreSQL client (supports serverless)
-- **Validation**: Zod 4.3.6 for SSIC regex (`^\d{5}$`) and SEARCH_LIMIT (1-500)
-- **Response**: JSON array of `EntitySearchResult` objects
+- **Validation**: Zod 4.3.6 for SSIC regex (`^\d{5}$`) and positive integer page number
+- **Response**: Paginated JSON with `data`, `pagination`, and `totals` (`liveCompanies`, `lastUpdatedAt`)
+- **Caching**: `Cache-Control: public, max-age=30, stale-while-revalidate=120`
 
 ### Database
 - **Engine**: PostgreSQL 16 (local Docker or Neon cloud)
-- **Schema**: `entities_a`, `entities_b`, `active_entities` (view)
-- **Columns**: UEN, entity_name, street_name, primary_ssic_code
+- **Schema**: `entities_a`, `entities_b`, `active_entities` (view), `etl_metadata`
+- **Columns**: UEN, entity_name, street_name, primary_ssic_code, entity_status_description
 - **Indexes**: On `primary_ssic_code` for fast SSIC lookups
 - **Pattern**: Blue-green swap (atomic view switch, zero downtime)
 
@@ -36,16 +38,19 @@ Build a high-performance search tool allowing users to query Singapore companies
 - **Logic**:
   1. Initiate async CSV generation via `/initiate-download`
   2. Poll with backoff (6s intervals, 10 retries) via `/poll-download`
-  3. Download CSV, normalize columns (handle 4+ aliases), filter valid UEN/SSIC
-  4. Merge datasets, deduplicate by (UEN, SSIC), load via PostgreSQL COPY
-  5. Atomically swap view to new table in transaction
+   3. Download CSV with hardcoded filter `entity_status_description LIKE "Live"` (matches `Live` + `Live Company`)
+   4. Normalize columns (handle aliases), filter valid UEN/SSIC
+   5. Merge datasets, deduplicate, load via PostgreSQL COPY
+   6. Atomically swap view to new table in transaction
+   7. Update `etl_metadata.last_updated_at` on successful run
 - **Rate Limiting**: 13s delay between datasets (respects 5 req/min free tier)
-- **Filtering**: Configurable entity status ("Live", "Live Company", or both)
+- **Filtering**: Hardcoded `LIKE "Live"` behavior (do not rely on env filter)
 
 ### Automation
 - **CI/CD**: GitHub Actions workflow (`.github/workflows/acra-etl.yml`)
 - **Schedule**: Weekly (Mondays 03:00 UTC)
-- **Secrets Required**: DATABASE_URL, ACRA_API_KEY, ACRA_ENTITY_STATUS_FILTER
+- **Secrets Required**: DATABASE_URL, ACRA_API_KEY
+- **Optional Secrets**: ACRA_POLL_RETRIES, ACRA_POLL_WAIT_SECS, ACRA_RATE_LIMIT_DELAY
 - **Deployment**: Vercel (Next.js), Neon (PostgreSQL)
 
 ---
@@ -80,7 +85,8 @@ Queries always hit `SELECT * FROM active_entities`; they never see empty tables.
 ```typescript
 // src/components/search-panel.tsx
 const [ssic, setSsic] = useQueryState('ssic', parseAsString);
-// Auto-persists to URL: ?ssic=62011
+const [page, setPage] = useQueryState('page', parseAsInteger);
+// Auto-persists to URL: ?ssic=62011&page=2
 ```
 Browser back/forward works; state survives page reload.
 
@@ -92,6 +98,7 @@ ALIASES = {
   "entity_name": ["entity_name", "entityname", "business_name", "name"],
   "street_name": ["street_name", "street", "address_street_name"],
   "primary_ssic_code": ["primary_ssic_code", "primary_ssic", "ssic_code", "ssic"],
+   "entity_status_description": ["entity_status_description", "entity_status", "status"],
 }
 ```
 Handles variations in source CSV column names without hardcoding.
@@ -101,12 +108,23 @@ Handles variations in source CSV column names without hardcoding.
 # .env.local / .env.example
 DATABASE_URL=postgres://...
 ACRA_API_KEY=v2:...
-ACRA_ENTITY_STATUS_FILTER=Live,Live Company  # Comma-separated
 ACRA_POLL_RETRIES=10
 ACRA_POLL_WAIT_SECS=6
 ACRA_RATE_LIMIT_DELAY=13
 ```
-No hardcoded secrets; all config from environment.
+No hardcoded secrets; all runtime config from environment except status filter (hardcoded in ETL logic).
+
+### 6. Last-Updated Metadata
+```sql
+-- Updated each successful ETL run
+etl_metadata(id = 1, last_updated_at = NOW())
+```
+API surfaces this as `totals.lastUpdatedAt` for frontend display.
+
+### 7. Short-Term Caching
+- API responses include short cache headers (`max-age=30`, `stale-while-revalidate=120`)
+- Frontend uses sessionStorage TTL cache for page results and summary counters
+- Frontend prefetches next page after each successful load
 
 ---
 
@@ -114,35 +132,24 @@ No hardcoded secrets; all config from environment.
 
 ✅ **Completed**:
 - Full-stack scaffolding (Next.js 16 + Drizzle + Tailwind v4)
-- Search API with SSIC validation and indexing
-- Minimalist frontend UI with nuqs sync, skeleton loading
-- Python ETL with async polling, column mapping, blue-green swap
+- Search API with pagination, totals, and caching headers
+- Frontend UI with smooth pagination loader and short-term client caching
+- Python ETL with async polling, hardcoded Live-like filter, blue-green swap, and metadata timestamp
 - GitHub Actions weekly automation
 - Production build validation (passes lint + TypeScript check)
-- Docker Postgres guidance provided
-
-⏳ **In Progress/Testing**:
-- Local ETL execution (user has valid API key, running `npm run etl:run`)
-- **Current blocker**: 403 Forbidden on `/initiate-download` endpoint
-  - User's API key needs verification (may be invalid/expired/insufficient permissions)
-  - Once API key is valid, ETL should populate database
 
 🔄 **Next Steps**:
-1. **Verify API Key**: Test directly via curl; validate on data.gov.sg dashboard
-2. **Run ETL**: Once key is valid, `npm run etl:run` should load ~300k-400k entities
-3. **Test Frontend Search**: After ETL completes, verify search works at `http://localhost:3000`
-4. **Integration Testing**: Test edge cases (invalid SSIC, empty results, pagination)
-5. **Production Deployment**: Push to Vercel + Neon with secrets configured
-6. **Monitor Weekly Runs**: Verify GitHub Actions executes every Monday 03:00 UTC
+1. **Monitor ETL runtime**: Ensure scheduled workflow remains healthy weekly
+2. **Observe cache behavior**: Tune TTL if fresher counters are needed
+3. **Production hardening**: Add basic telemetry/log alerts for ETL failures
 
 ---
 
 ## Known Issues/Edge Cases
 
-1. **API Key 403 Error** (Active)
-   - Root cause: API key invalid/expired or lacks permissions
-   - Solution: Regenerate key on data.gov.sg dashboard
-   - Test via curl before running ETL
+1. **Next.js Root Warning During Build**
+   - Multiple lockfiles detected in parent folder can trigger a Turbopack root warning
+   - Consider setting `turbopack.root` in `next.config.ts` or cleaning extra lockfiles
 
 2. **Next.js 16 Suspense Boundary Requirement**
    - `useQueryState` from nuqs requires Suspense boundary wrapper
@@ -163,7 +170,7 @@ No hardcoded secrets; all config from environment.
    - Already handles 4+ variations per column; expand ALIASES dict if new variations found
 
 6. **Duplicate Handling**
-   - Deduplicates by (UEN, SSIC) pair; same UEN can have multiple SSIC codes
+   - Deduplicates by (UEN, SSIC, entity_status_description)
    - Blue-green swap prevents partial updates; all-or-nothing atomicity guaranteed
 
 ---
@@ -182,7 +189,6 @@ leadsg/
 │   └── lib/
 │       ├── schema.ts             # Drizzle schema
 │       ├── db.ts                 # Lazy PostgreSQL client
-│       ├── env.ts                # Zod env validation
 │       └── types.ts              # EntitySearchResult
 ├── etl/
 │   ├── acra_data_mirror.py       # Main ETL script
@@ -211,22 +217,23 @@ npm run db:push              # Push schema to PostgreSQL
 npm run etl:run              # Run ETL pipeline
 
 # Testing
-curl "http://localhost:3000/api/search?ssic=62011"
+curl "http://localhost:3000/api/search?ssic=62011&page=1"
 
 # Verification
 psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT COUNT(*) FROM active_entities"
+psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_at FROM etl_metadata WHERE id = 1"
 ```
 
 ---
 
 ## Critical Notes for Next Session
 
-1. **API Key is the blocker**: User needs to validate/regenerate key on data.gov.sg
-2. **Once ETL works**: Search should be immediately functional (no additional config needed)
-3. **Deployment is straightforward**: Push to Vercel + set secrets on GitHub + Neon DB
+1. **Status filter is hardcoded**: ETL uses `LIKE "Live"` intentionally to include `Live Company`
+2. **UI expects totals + pagination contract**: Keep `/api/search` response shape stable
+3. **ETL metadata powers frontend freshness info**: Keep `etl_metadata` update in ETL transaction
 4. **No breaking changes expected**: Architecture is stable; frontend/backend/ETL are decoupled
 
 ---
 
 **Last Updated**: 19 March 2026  
-**Context**: Full-stack implementation complete; awaiting API key validation for ETL testing
+**Context**: Full-stack implementation complete with pagination, metadata timestamp, and short-term caching

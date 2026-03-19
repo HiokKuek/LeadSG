@@ -1,4 +1,4 @@
-# ACRA Data Mirror & SSIC Search Tool
+# LeadSG 📞
 
 This project mirrors Singapore ACRA entity data into Postgres using a blue-green ETL pipeline, then serves a fast SSIC search UI with Next.js App Router.
 
@@ -14,8 +14,12 @@ This project mirrors Singapore ACRA entity data into Postgres using a blue-green
 - Zero-downtime blue-green data load into `entities_a` / `entities_b`
 - Atomic switch of `active_entities` view in one transaction
 - Indexed lookup by `primary_ssic_code`
+- Hardcoded ETL status filter `LIKE "Live"` (matches both `Live` and `Live Company`)
+- Persists ETL refresh timestamp in `etl_metadata.last_updated_at`
 - URL-synced search state with `nuqs` (`?ssic=62011`)
-- Minimal table UI with skeleton loading state
+- Server-side pagination (50 rows/page) with total match counts
+- Frontend shows total live companies and last database update timestamp
+- Short-lived API + browser session caching for smoother paging
 - Weekly GitHub Actions ETL schedule
 
 ## Environment
@@ -59,6 +63,10 @@ Primary search source is the `active_entities` view with columns:
 - `primary_ssic_code`
 - `entity_status_description`
 
+ETL metadata table:
+
+- `etl_metadata(id, last_updated_at)`
+
 ETL ensures indexes exist on both blue-green tables:
 
 - `entities_a_primary_ssic_code_idx`
@@ -78,6 +86,17 @@ Optional GitHub Secrets (override script defaults if set):
 - `ACRA_POLL_RETRIES`
 - `ACRA_POLL_WAIT_SECS`
 - `ACRA_RATE_LIMIT_DELAY`
+
+## Search API
+
+`GET /api/search?ssic=62011&page=1`
+
+- Validates `ssic` as exactly 5 digits
+- Returns paginated rows (`pageSize=50`) plus:
+	- `pagination.totalMatching`
+	- `totals.liveCompanies`
+	- `totals.lastUpdatedAt`
+- Uses short cache headers: `max-age=30, stale-while-revalidate=120`
 
 ## Deploy Notes
 
