@@ -22,6 +22,7 @@ export function SearchPanelFallback() {
               <TableHead className="w-[180px]">UEN</TableHead>
               <TableHead>Entity Name</TableHead>
               <TableHead>Street Name</TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -35,6 +36,9 @@ export function SearchPanelFallback() {
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-44" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
                 </TableCell>
               </TableRow>
             ))}

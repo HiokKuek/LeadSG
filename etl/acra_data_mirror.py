@@ -53,6 +53,7 @@ TARGET_COLUMNS = [
     "entity_name",
     "street_name",
     "primary_ssic_code",
+    "entity_status_description",
 ]
 
 COLUMN_ALIASES = {
@@ -65,14 +66,26 @@ COLUMN_ALIASES = {
         "ssic_code",
         "ssic",
     ],
+    "entity_status_description": [
+        "entity_status_description",
+        "entity_status",
+        "status",
+    ],
 }
+
+FILTERS = [
+    {
+        "columnName": "entity_status_description",
+        "type": "LIKE",
+        "value": "Live",
+    }
+]
 
 
 @dataclass(frozen=True)
 class Settings:
     database_url: str
     api_key: str
-    entity_status_filters: list[str]
     poll_retries: int
     poll_wait_secs: int
     rate_limit_delay: float
@@ -81,13 +94,7 @@ class Settings:
 def load_settings() -> Settings:
     database_url = os.environ["DATABASE_URL"]
     api_key = os.environ["ACRA_API_KEY"]
-    
-    # Parse comma-separated entity status filters (e.g., "Live,Live Company")
-    raw_filters = os.getenv("ACRA_ENTITY_STATUS_FILTER", "Live")
-    entity_status_filters = [
-        f.strip() for f in raw_filters.split(",") if f.strip()
-    ] if raw_filters else []
-    
+
     poll_retries = int(os.getenv("ACRA_POLL_RETRIES", "10"))
     poll_wait_secs = int(os.getenv("ACRA_POLL_WAIT_SECS", "6"))
     rate_limit_delay = float(os.getenv("ACRA_RATE_LIMIT_DELAY", "13.0"))
@@ -95,7 +102,6 @@ def load_settings() -> Settings:
     return Settings(
         database_url=database_url,
         api_key=api_key,
-        entity_status_filters=entity_status_filters,
         poll_retries=poll_retries,
         poll_wait_secs=poll_wait_secs,
         rate_limit_delay=rate_limit_delay,
@@ -115,25 +121,13 @@ def headers_with_key(api_key: str) -> dict:
 def initiate_download(
     dataset_id: str,
     api_key: str,
-    entity_status_filters: list[str] | None = None,
     base_url: str = "https://api-open.data.gov.sg/v1/public/api/datasets",
 ) -> bool:
     """Kick off async CSV generation on data.gov.sg."""
-    filters = []
-    if entity_status_filters:
-        for status in entity_status_filters:
-            filters.append(
-                {
-                    "columnName": "entity_status_description",
-                    "type": "LIKE",
-                    "value": status,
-                }
-            )
-
     resp = requests.get(
         f"{base_url}/{dataset_id}/initiate-download",
         headers=headers_with_key(api_key),
-        json={"columnNames": TARGET_COLUMNS, "filters": filters},
+        json={"columnNames": TARGET_COLUMNS, "filters": FILTERS},
         timeout=30,
     )
     resp.raise_for_status()
@@ -146,29 +140,17 @@ def initiate_download(
 def poll_for_url(
     dataset_id: str,
     api_key: str,
-    entity_status_filters: list[str] | None = None,
     retries: int = 10,
     wait_secs: int = 6,
     base_url: str = "https://api-open.data.gov.sg/v1/public/api/datasets",
 ) -> str:
     """Poll until the download URL is available (async CSV generation)."""
-    filters = []
-    if entity_status_filters:
-        for status in entity_status_filters:
-            filters.append(
-                {
-                    "columnName": "entity_status_description",
-                    "type": "LIKE",
-                    "value": status,
-                }
-            )
-
     for attempt in range(1, retries + 1):
         time.sleep(wait_secs)
         resp = requests.get(
             f"{base_url}/{dataset_id}/poll-download",
             headers=headers_with_key(api_key),
-            json={"columnNames": TARGET_COLUMNS, "filters": filters},
+            json={"columnNames": TARGET_COLUMNS, "filters": FILTERS},
             timeout=30,
         )
         resp.raise_for_status()
@@ -193,18 +175,7 @@ def normalize_columns(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def resolve_column_name(frame: pd.DataFrame, canonical_name: str) -> str:
-    aliases = {
-        "uen": ["uen", "uen_no", "entity_uen"],
-        "entity_name": ["entity_name", "entityname", "business_name", "name"],
-        "street_name": ["street_name", "street", "address_street_name"],
-        "primary_ssic_code": [
-            "primary_ssic_code",
-            "primary_ssic",
-            "ssic_code",
-            "ssic",
-        ],
-    }
-    candidates = aliases[canonical_name]
+    candidates = COLUMN_ALIASES[canonical_name]
     for candidate in candidates:
         if candidate in frame.columns:
             return candidate
@@ -243,12 +214,10 @@ def fetch_dataset_via_api(
     initiate_download(
         dataset_id,
         settings.api_key,
-        entity_status_filters=settings.entity_status_filters if settings.entity_status_filters else None,
     )
     download_url = poll_for_url(
         dataset_id,
         settings.api_key,
-        entity_status_filters=settings.entity_status_filters if settings.entity_status_filters else None,
         retries=settings.poll_retries,
         wait_secs=settings.poll_wait_secs,
     )
@@ -282,7 +251,9 @@ def fetch_all_datasets(dataset_ids: list[str], settings: Settings) -> pd.DataFra
     print(f"\nMerging {len(frames)} datasets …")
     merged = pd.concat(frames, ignore_index=True)
     before_dedup = len(merged)
-    merged = merged.drop_duplicates(subset=["uen", "primary_ssic_code"])
+    merged = merged.drop_duplicates(
+        subset=["uen", "primary_ssic_code", "entity_status_description"]
+    )
     after_dedup = len(merged)
     print(
         f"Deduplicated: {before_dedup:,} rows → {after_dedup:,} rows "
@@ -297,17 +268,26 @@ def bootstrap_schema(cursor: psycopg.Cursor) -> None:
       uen TEXT NOT NULL,
       entity_name TEXT NOT NULL,
       street_name TEXT NOT NULL,
-      primary_ssic_code VARCHAR(5) NOT NULL
+      primary_ssic_code VARCHAR(5) NOT NULL,
+      entity_status_description TEXT NOT NULL
     )
     """
 
     for table_name in ("entities_a", "entities_b"):
         cursor.execute(sql.SQL(table_template).format(table_name=sql.Identifier(table_name)))
+        cursor.execute(
+            sql.SQL(
+                """
+                ALTER TABLE {}
+                ADD COLUMN IF NOT EXISTS entity_status_description TEXT NOT NULL DEFAULT ''
+                """
+            ).format(sql.Identifier(table_name))
+        )
 
     cursor.execute(
         """
         CREATE OR REPLACE VIEW active_entities AS
-        SELECT uen, entity_name, street_name, primary_ssic_code FROM entities_a
+        SELECT uen, entity_name, street_name, primary_ssic_code, entity_status_description FROM entities_a
         """
     )
 
@@ -334,7 +314,7 @@ def copy_into_table(cursor: psycopg.Cursor, table_name: str, frame: pd.DataFrame
     buffer.seek(0)
 
     copy_query = sql.SQL(
-        "COPY {} (uen, entity_name, street_name, primary_ssic_code) FROM STDIN WITH (FORMAT CSV)"
+        "COPY {} (uen, entity_name, street_name, primary_ssic_code, entity_status_description) FROM STDIN WITH (FORMAT CSV)"
     ).format(sql.Identifier(table_name))
 
     with cursor.copy(copy_query) as copy:
@@ -355,7 +335,7 @@ def swap_active_view(cursor: psycopg.Cursor, new_active_table: str) -> None:
         sql.SQL(
             """
             CREATE OR REPLACE VIEW active_entities AS
-            SELECT uen, entity_name, street_name, primary_ssic_code
+            SELECT uen, entity_name, street_name, primary_ssic_code, entity_status_description
             FROM {}
             """
         ).format(sql.Identifier(new_active_table))
@@ -369,8 +349,7 @@ def run() -> None:
     print("=" * 60)
 
     print("\n[1/3] Preparing datasets …")
-    filters_display = ", ".join(settings.entity_status_filters) if settings.entity_status_filters else "All"
-    print(f"Entity Status Filter: {filters_display}")
+    print("Entity Status Filter: LIKE 'Live' (matches 'Live' and 'Live Company')")
     print(f"Found {len(DATASET_IDS)} dataset(s) (A-Z + Others)")
 
     print("\n[2/3] Downloading and normalizing data …")

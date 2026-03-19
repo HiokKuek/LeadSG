@@ -5,6 +5,7 @@ const entityColumns = {
   entityName: text("entity_name").notNull(),
   streetName: text("street_name").notNull(),
   primarySsicCode: varchar("primary_ssic_code", { length: 5 }).notNull(),
+  entityStatusDescription: text("entity_status_description").notNull(),
 };
 
 export const entitiesA = pgTable("entities_a", entityColumns);

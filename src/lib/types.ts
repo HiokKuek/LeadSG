@@ -3,4 +3,5 @@ export type EntitySearchResult = {
   entityName: string;
   streetName: string;
   primarySsicCode: string;
+  entityStatusDescription: string;
 };

@@ -24,7 +24,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ACRA_API_KEY: ${{ secrets.ACRA_API_KEY }}
-          ACRA_ENTITY_STATUS_FILTER: ${{ secrets.ACRA_ENTITY_STATUS_FILTER }}
           ACRA_POLL_RETRIES: ${{ secrets.ACRA_POLL_RETRIES }}
           ACRA_POLL_WAIT_SECS: ${{ secrets.ACRA_POLL_WAIT_SECS }}
           ACRA_RATE_LIMIT_DELAY: ${{ secrets.ACRA_RATE_LIMIT_DELAY }}

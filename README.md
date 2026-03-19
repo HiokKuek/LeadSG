@@ -29,12 +29,11 @@ Required:
 
 Optional ETL runtime controls:
 
-- `ACRA_ENTITY_STATUS_FILTER` (comma-separated, defaults to `Live`)
 - `ACRA_POLL_RETRIES` (defaults to `10`)
 - `ACRA_POLL_WAIT_SECS` (defaults to `6`)
 - `ACRA_RATE_LIMIT_DELAY` (defaults to `13.0`)
 
-`SEARCH_LIMIT` defaults to `100`.
+ETL uses a hardcoded filter `entity_status_description LIKE "Live"`, which matches both `Live` and `Live Company`.
 
 ## Run Locally
 
@@ -58,6 +57,7 @@ Primary search source is the `active_entities` view with columns:
 - `entity_name`
 - `street_name`
 - `primary_ssic_code`
+- `entity_status_description`
 
 ETL ensures indexes exist on both blue-green tables:
 
@@ -75,7 +75,6 @@ GitHub Secrets to set:
 
 Optional GitHub Secrets (override script defaults if set):
 
-- `ACRA_ENTITY_STATUS_FILTER`
 - `ACRA_POLL_RETRIES`
 - `ACRA_POLL_WAIT_SECS`
 - `ACRA_RATE_LIMIT_DELAY`
