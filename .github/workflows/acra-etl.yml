@@ -1,0 +1,29 @@
+name: ACRA Data Mirror ETL
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ETL dependencies
+        run: pip install -r etl/requirements.txt
+
+      - name: Run blue-green ETL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ACRA_DATASET_METADATA_URL: ${{ secrets.ACRA_DATASET_METADATA_URL }}
+          ACRA_CHILD_DATASET_URLS: ${{ secrets.ACRA_CHILD_DATASET_URLS }}
+          ACRA_CHILD_DATASET_URL_TEMPLATE: ${{ secrets.ACRA_CHILD_DATASET_URL_TEMPLATE }}
+        run: python etl/acra_data_mirror.py

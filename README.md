@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ACRA Data Mirror & SSIC Search Tool
 
-## Getting Started
+This project mirrors Singapore ACRA entity data into Postgres using a blue-green ETL pipeline, then serves a fast SSIC search UI with Next.js App Router.
 
-First, run the development server:
+## Stack
+
+- Next.js (App Router, TypeScript)
+- Tailwind CSS v4 + shadcn/ui-style components
+- Drizzle ORM + Postgres (Neon-ready)
+- Python ETL (`pandas` + `psycopg3`)
+
+## Features
+
+- Zero-downtime blue-green data load into `entities_a` / `entities_b`
+- Atomic switch of `active_entities` view in one transaction
+- Indexed lookup by `primary_ssic_code`
+- URL-synced search state with `nuqs` (`?ssic=62011`)
+- Minimal table UI with skeleton loading state
+- Weekly GitHub Actions ETL schedule
+
+## Environment
+
+Copy `.env.example` to `.env.local` for local development.
+
+Required:
+
+- `DATABASE_URL`
+
+Optional ETL discovery inputs:
+
+- `ACRA_DATASET_METADATA_URL` (metadata endpoint at `api-open.data.gov.sg`)
+- `ACRA_CHILD_DATASET_URLS` (comma-separated list of A-Z child CSV URLs)
+- `ACRA_CHILD_DATASET_URL_TEMPLATE` (template containing `{letter}`)
+
+`SEARCH_LIMIT` defaults to `100`.
+
+## Run Locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run ETL manually:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+python -m pip install -r etl/requirements.txt
+npm run etl:run
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Data Model
 
-## Learn More
+Primary search source is the `active_entities` view with columns:
 
-To learn more about Next.js, take a look at the following resources:
+- `uen`
+- `entity_name`
+- `street_name`
+- `primary_ssic_code`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+ETL ensures indexes exist on both blue-green tables:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `entities_a_primary_ssic_code_idx`
+- `entities_b_primary_ssic_code_idx`
 
-## Deploy on Vercel
+## Automation
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Weekly ETL workflow: `.github/workflows/acra-etl.yml`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+GitHub Secrets to set:
+
+- `DATABASE_URL`
+- `ACRA_DATASET_METADATA_URL` or `ACRA_CHILD_DATASET_URLS` or `ACRA_CHILD_DATASET_URL_TEMPLATE`
+
+## Deploy Notes
+
+- Vercel: set `DATABASE_URL` in project environment variables.
+- Neon: use pooled connection string and keep SSL enabled.
+- No secrets are hardcoded in source.
