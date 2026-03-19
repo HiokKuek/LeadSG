@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ACRA SSIC Search",
+  title: "LeadSG 📞",
   description: "Search Singapore companies by primary SSIC code.",
 };
 
