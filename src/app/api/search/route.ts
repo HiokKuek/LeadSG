@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getDb } from "@/lib/db";
-import { activeEntities } from "@/lib/schema";
+import { activeEntities, etlMetadata } from "@/lib/schema";
 import type { EntitySearchResult } from "@/lib/types";
 
 const ssicSchema = z.string().regex(/^\d{5}$/);
@@ -20,6 +20,7 @@ type SearchResponse = {
   };
   totals: {
     liveCompanies: number;
+    lastUpdatedAt: string | null;
   };
 };
 
@@ -43,6 +44,20 @@ export async function GET(request: NextRequest) {
     .from(activeEntities);
   const liveCompanies = liveCountRows[0]?.count ?? 0;
 
+  let lastUpdatedAt: string | null = null;
+  try {
+    const metadataRows = await db
+      .select({ lastUpdatedAt: etlMetadata.lastUpdatedAt })
+      .from(etlMetadata)
+      .where(eq(etlMetadata.id, 1))
+      .limit(1);
+
+    const value = metadataRows[0]?.lastUpdatedAt;
+    lastUpdatedAt = value ? value.toISOString() : null;
+  } catch {
+    lastUpdatedAt = null;
+  }
+
   if (!query) {
     return NextResponse.json<SearchResponse>({
       data: [],
@@ -54,6 +69,7 @@ export async function GET(request: NextRequest) {
       },
       totals: {
         liveCompanies,
+        lastUpdatedAt,
       },
     });
   }
@@ -103,6 +119,7 @@ export async function GET(request: NextRequest) {
     },
     totals: {
       liveCompanies,
+      lastUpdatedAt,
     },
   });
 }

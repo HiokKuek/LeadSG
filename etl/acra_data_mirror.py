@@ -291,6 +291,26 @@ def bootstrap_schema(cursor: psycopg.Cursor) -> None:
         """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS etl_metadata (
+          id SMALLINT PRIMARY KEY CHECK (id = 1),
+          last_updated_at TIMESTAMPTZ NOT NULL
+        )
+        """
+    )
+
+
+def update_etl_metadata(cursor: psycopg.Cursor) -> None:
+    cursor.execute(
+        """
+        INSERT INTO etl_metadata (id, last_updated_at)
+        VALUES (1, NOW())
+        ON CONFLICT (id)
+        DO UPDATE SET last_updated_at = EXCLUDED.last_updated_at
+        """
+    )
+
 
 def detect_active_table(cursor: psycopg.Cursor) -> str:
     cursor.execute(
@@ -380,6 +400,9 @@ def run() -> None:
 
             print(f"Swapping active_entities view to {inactive_table} …")
             swap_active_view(cursor, inactive_table)
+
+            print("Updating ETL metadata timestamp …")
+            update_etl_metadata(cursor)
 
         conn.commit()
         print(f"\n✓ Committed transaction (tables now at {inactive_table})")

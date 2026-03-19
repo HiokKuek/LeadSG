@@ -25,6 +25,7 @@ type SearchResponse = {
   };
   totals: {
     liveCompanies: number;
+    lastUpdatedAt: string | null;
   };
 };
 
@@ -36,6 +37,7 @@ export function SearchPanel() {
   const [page, setPage] = useQueryState("page", pageParser);
   const [rows, setRows] = useState<EntitySearchResult[]>([]);
   const [totalLiveCompanies, setTotalLiveCompanies] = useState(0);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [totalMatching, setTotalMatching] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [pageSize, setPageSize] = useState(50);
@@ -60,6 +62,7 @@ export function SearchPanel() {
 
         const payload = (await response.json()) as SearchResponse;
         setTotalLiveCompanies(payload.totals.liveCompanies);
+        setLastUpdatedAt(payload.totals.lastUpdatedAt);
       } catch (fetchError) {
         if ((fetchError as Error).name === "AbortError") {
           return;
@@ -104,6 +107,7 @@ export function SearchPanel() {
         const payload = (await response.json()) as SearchResponse;
         setRows(payload.data);
         setTotalLiveCompanies(payload.totals.liveCompanies);
+        setLastUpdatedAt(payload.totals.lastUpdatedAt);
         setTotalMatching(payload.pagination.totalMatching);
         setTotalPages(payload.pagination.totalPages);
         setPageSize(payload.pagination.pageSize);
@@ -134,6 +138,12 @@ export function SearchPanel() {
   const displayRows = isValidSsic ? rows : [];
   const startRow = totalMatching === 0 ? 0 : (page - 1) * pageSize + 1;
   const endRow = totalMatching === 0 ? 0 : startRow + displayRows.length - 1;
+  const formattedLastUpdated = lastUpdatedAt
+    ? new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(lastUpdatedAt))
+    : "Not available yet";
   const displayMessage =
     normalizedSsic.length === 0
       ? "Search results will appear here."
@@ -164,6 +174,7 @@ export function SearchPanel() {
             <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden />
             Number of Live companies: {totalLiveCompanies.toLocaleString()}
           </p>
+          <p>Last database update: {formattedLastUpdated}</p>
           {isValidSsic ? (
             <p>Search matches: {totalMatching.toLocaleString()}</p>
           ) : null}
