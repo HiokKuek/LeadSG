@@ -235,5 +235,52 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
 
 ---
 
-**Last Updated**: 19 March 2026  
-**Context**: Full-stack implementation complete with pagination, metadata timestamp, and short-term caching
+## Planned Extension: Multi-SSIC Paid Contact Enrichment
+
+### Product Constraints (Confirmed)
+1. **Scope is SSIC-only**: users enrich by SSIC code(s), not arbitrary company picks
+2. **Multi-SSIC selection supported**: users can submit multiple SSIC codes in one run
+3. **Manual payment flow**: no Stripe/automated billing yet
+4. **Code redemption required**: user must redeem a unique admin-issued code tied to their authenticated account before job start
+5. **Cache-first behavior**: enrichment results must be cached in Postgres and reused for subsequent queries
+6. **Hard budget controls**: enforce account/code/global limits before and during paid Google calls
+
+### Google API Cost Strategy
+1. Text Search (`places.id` field mask only) first
+2. Place Details (paid enterprise SKU) only for cache misses/expired entries
+3. Present preflight estimate before run:
+   - selected SSIC codes
+   - candidate company count
+   - estimated cache hits/misses
+   - projected paid calls and estimated max cost
+
+### Planned Data Model Additions
+- `users`
+- `payment_codes`
+- `payment_code_redemptions`
+- `company_contact_enrichment` (keyed by `uen`, matched to `active_entities.uen`)
+- `enrichment_jobs`
+- `enrichment_job_items`
+
+### Planned API Additions
+- `POST /api/enrichment/preflight`
+- `POST /api/enrichment/redeem`
+- `POST /api/enrichment/jobs`
+- `GET /api/enrichment/jobs/:id`
+- `GET /api/enrichment/results`
+
+### Execution Architecture
+- Keep existing search API contract stable and additive
+- Use async job processing for enrichment (do not block request/response path)
+- Run worker on home NAS (OpenMediaVault Docker) with queue-backed design
+- Prefer private networking and persistent worker logs
+
+### Logging Expectations
+- Structured JSON logs from API and worker
+- Include correlation metadata: `request_id`, `job_id`, `user_id`, `code_id`, `ssic_list`, stage, retries, latency
+- Persist usage/audit data for manual payment reconciliation
+
+---
+
+**Last Updated**: 20 March 2026  
+**Context**: Full-stack search is complete; planning started for multi-SSIC prepaid contact enrichment with cache-first async execution
