@@ -35,6 +35,7 @@ export const etlMetadata = pgTable("etl_metadata", {
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull(),
+  passwordHash: text("password_hash"),
   tier: varchar("tier", { length: 32 }).notNull().default("free"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

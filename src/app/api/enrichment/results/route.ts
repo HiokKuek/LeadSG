@@ -28,7 +28,7 @@ function parseSsicCodes(raw: string | null): string[] {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }

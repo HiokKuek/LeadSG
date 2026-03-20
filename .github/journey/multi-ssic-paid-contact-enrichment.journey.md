@@ -48,3 +48,10 @@
 - Resolved by aligning Drizzle schema with ETL bootstrap (`uen` type as `TEXT`).
 - Regenerated migrations and reapplied `db:push` successfully.
 - Decision retained: Drizzle is source of truth for app/enrichment tables; ETL remains focused on ACRA mirror workflow.
+
+### Phase 2.5 progress update (Auth + frontend controls)
+- Integrated Auth.js credentials flow with session-based auth.
+- Replaced temporary `x-user-id` enrichment auth with session-derived user resolution.
+- Added login page and homepage auth controls for visual testing.
+- Added preview enrichment controls UI to exercise preflight/redeem/job endpoints from browser.
+- Added `users.password_hash` schema support and generated follow-up migration.

@@ -112,3 +112,11 @@ In `SearchPanel`:
 - Cache hit behavior on repeated SSIC runs
 - Hard-stop budget enforcement
 - Worker restart/retry resilience on NAS
+
+## Implementation Status (Current)
+- ✅ Drizzle schema + migrations for enrichment/payment/auth tables
+- ✅ User-facing enrichment endpoints (`preflight`, `redeem`, `jobs`, `status`, `results`)
+- ✅ Admin quote endpoint with optional payment code issuance
+- ✅ Auth.js credentials integration and session-backed endpoint auth
+- ✅ Frontend preview controls for partial visual/integration testing
+- ⏳ Pending: worker queue execution, Google API pipeline, final UX polish, full automated tests

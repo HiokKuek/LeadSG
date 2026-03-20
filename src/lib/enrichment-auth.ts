@@ -1,5 +1,7 @@
+import { getServerSession } from "next-auth";
 import type { NextRequest } from "next/server";
 
+import { authOptions } from "@/lib/auth-options";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/schema";
 import { eq } from "drizzle-orm";
@@ -11,15 +13,14 @@ export type AuthenticatedUser = {
   isActive: boolean;
 };
 
-export async function getAuthenticatedUser(
-  request: NextRequest,
-): Promise<AuthenticatedUser | null> {
-  const userIdHeader = request.headers.get("x-user-id");
-  if (!userIdHeader) {
+export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> {
+  const session = await getServerSession(authOptions);
+  const sessionUserId = session?.user?.id;
+  if (!sessionUserId) {
     return null;
   }
 
-  const userId = Number.parseInt(userIdHeader, 10);
+  const userId = Number.parseInt(sessionUserId, 10);
   if (!Number.isFinite(userId) || userId <= 0) {
     return null;
   }
