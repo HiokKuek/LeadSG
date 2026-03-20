@@ -30,3 +30,21 @@
 3. Add queue/worker scaffold and NAS deployment artifacts.
 4. Integrate multi-SSIC + code redemption flow in `SearchPanel`.
 5. Add tests for quotas, cache, and job lifecycle.
+
+### Phase 2 progress update
+- Implemented enrichment endpoints in app backend:
+  - `POST /api/enrichment/preflight`
+  - `POST /api/enrichment/redeem`
+  - `POST /api/enrichment/jobs`
+  - `GET /api/enrichment/jobs/:id`
+  - `GET /api/enrichment/results`
+- Added admin-only endpoint `POST /api/enrichment/admin/quote`:
+  - computes user charge estimate vs provider (Google) cost estimate
+  - supports optional payment code issuance for manual payment flow
+- Updated user preflight response to hide cache hit/miss internals while still showing estimated price.
+
+### Migration + ETL compatibility note
+- Initial `db:push` failed because Drizzle tried altering `entities_a.uen` while `active_entities` view depended on it.
+- Resolved by aligning Drizzle schema with ETL bootstrap (`uen` type as `TEXT`).
+- Regenerated migrations and reapplied `db:push` successfully.
+- Decision retained: Drizzle is source of truth for app/enrichment tables; ETL remains focused on ACRA mirror workflow.

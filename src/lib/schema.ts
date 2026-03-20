@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 const entityColumns = {
-  uen: varchar("uen", { length: 32 }).notNull(),
+  uen: text("uen").notNull(),
   entityName: text("entity_name").notNull(),
   streetName: text("street_name").notNull(),
   primarySsicCode: varchar("primary_ssic_code", { length: 5 }).notNull(),

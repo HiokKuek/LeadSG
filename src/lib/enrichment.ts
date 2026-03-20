@@ -14,6 +14,12 @@ export const DETAILS_SKU_PRICE_PER_1000_USD = Number.parseFloat(
   process.env.GOOGLE_PLACES_DETAILS_PRICE_PER_1000_USD ?? "20",
 );
 
+export const USER_PRICE_PER_1000_USD = Number.parseFloat(
+  process.env.ENRICHMENT_USER_PRICE_PER_1000_USD
+  ?? process.env.GOOGLE_PLACES_DETAILS_PRICE_PER_1000_USD
+  ?? "20",
+);
+
 export const DEFAULT_CACHE_TTL_DAYS = Number.parseInt(
   process.env.ENRICHMENT_CACHE_TTL_DAYS ?? "7",
   10,
@@ -31,6 +37,17 @@ export const redeemCodeSchema = z.object({
   code: z.string().trim().min(6).max(64),
 });
 
+export const adminQuoteSchema = z.object({
+  ssicCodes: z
+    .array(z.string().trim().regex(/^\d{5}$/))
+    .min(1)
+    .max(50)
+    .transform((codes) => Array.from(new Set(codes))),
+  issueCode: z.boolean().optional().default(false),
+  purchasedDetailCalls: z.coerce.number().int().min(1).optional(),
+  expiresInDays: z.coerce.number().int().min(1).max(365).optional(),
+});
+
 export function toUsd(amount: number): number {
   return Number.parseFloat(amount.toFixed(4));
 }
@@ -38,6 +55,18 @@ export function toUsd(amount: number): number {
 export function estimateMaxCostUsd(projectedPaidCalls: number): number {
   const perCall = DETAILS_SKU_PRICE_PER_1000_USD / 1000;
   return toUsd(projectedPaidCalls * perCall);
+}
+
+export function estimateUserChargeUsd(chargeableCalls: number): number {
+  const perCall = USER_PRICE_PER_1000_USD / 1000;
+  return toUsd(chargeableCalls * perCall);
+}
+
+export function buildPaymentCode(length = 16): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length }, () =>
+    alphabet[Math.floor(Math.random() * alphabet.length)],
+  ).join("");
 }
 
 type Db = PostgresJsDatabase<typeof schema>;

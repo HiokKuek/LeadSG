@@ -268,12 +268,25 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
 - `POST /api/enrichment/jobs`
 - `GET /api/enrichment/jobs/:id`
 - `GET /api/enrichment/results`
+- `POST /api/enrichment/admin/quote` (admin-only quote + optional code issuance)
+
+### API Behavior Notes (Phase 2)
+- `/api/enrichment/preflight` is user-facing and should not expose cache hit/miss internals
+- User preflight response should provide estimated payable amount based on Google pricing model
+- Admin quote endpoint can expose cache-aware economics (`estimated user charge`, `estimated provider cost`, margin)
+- Admin quote endpoint can issue payment codes after manual payment confirmation
 
 ### Execution Architecture
 - Keep existing search API contract stable and additive
 - Use async job processing for enrichment (do not block request/response path)
 - Run worker on home NAS (OpenMediaVault Docker) with queue-backed design
 - Prefer private networking and persistent worker logs
+
+### Schema Source of Truth and ETL Compatibility
+- App and enrichment tables are managed by Drizzle migrations (`db:generate`, `db:push`)
+- ETL script remains responsible only for ACRA mirror tables and `active_entities` view lifecycle
+- Keep ETL and Drizzle column types aligned for shared base tables to avoid migration/view conflicts
+- Run schema migration before calling enrichment endpoints in a fresh environment
 
 ### Logging Expectations
 - Structured JSON logs from API and worker

@@ -13,10 +13,21 @@ export type EnrichmentPreflightRequest = {
 export type EnrichmentPreflightResponse = {
   ssicCodes: string[];
   candidateCount: number;
-  cacheHitCount: number;
-  cacheMissCount: number;
   projectedPaidCalls: number;
-  projectedMaxCostUsd: number;
+  estimatedPriceUsd: number;
+};
+
+export type EnrichmentAdminQuoteResponse = {
+  ssicCodes: string[];
+  candidateCount: number;
+  estimatedCacheHitCount: number;
+  estimatedPaidCalls: number;
+  estimatedUserChargeUsd: number;
+  estimatedProviderCostUsd: number;
+  estimatedGrossMarginUsd: number;
+  paymentCode: string | null;
+  paymentCodeDetailCalls: number | null;
+  paymentCodeExpiresAt: string | null;
 };
 
 export type EnrichmentRedeemRequest = {

@@ -29,10 +29,8 @@ export async function POST(request: NextRequest) {
   const response: EnrichmentPreflightResponse = {
     ssicCodes: parsed.data.ssicCodes,
     candidateCount: estimate.candidateCount,
-    cacheHitCount: estimate.cacheHitCount,
-    cacheMissCount: estimate.cacheMissCount,
     projectedPaidCalls: estimate.projectedPaidCalls,
-    projectedMaxCostUsd: estimate.projectedMaxCostUsd,
+    estimatedPriceUsd: estimate.projectedMaxCostUsd,
   };
 
   return NextResponse.json(response);

@@ -43,3 +43,13 @@ export async function getAuthenticatedUser(
 
   return user;
 }
+
+export function isAdminRequestAuthorized(request: NextRequest): boolean {
+  const configuredKey = process.env.ENRICHMENT_ADMIN_API_KEY;
+  if (!configuredKey) {
+    return false;
+  }
+
+  const supplied = request.headers.get("x-admin-key")?.trim();
+  return Boolean(supplied && supplied === configuredKey);
+}

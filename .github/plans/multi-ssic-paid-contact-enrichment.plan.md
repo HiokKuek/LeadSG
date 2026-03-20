@@ -38,11 +38,16 @@ Add an authenticated, prepaid enrichment workflow where users select one or more
   4. Persist fresh result + status
 
 ### 5) Cost and quota controls
-- Preflight estimate:
+- User preflight estimate:
   - candidate companies by selected SSIC set
-  - expected cache hits/misses
   - projected paid Place Details calls
-  - projected max cost
+  - estimated payable amount
+  - do not expose cache hit/miss internals
+- Admin quote estimate:
+  - candidate companies by selected SSIC set
+  - estimated cache hits/misses
+  - estimated provider (Google) cost
+  - estimated user charge and gross margin
 - Hard-stop guards:
   - user quota
   - redeemed-code quota
@@ -68,6 +73,13 @@ Add an authenticated, prepaid enrichment workflow where users select one or more
 - `POST /api/enrichment/jobs`
 - `GET /api/enrichment/jobs/:id`
 - `GET /api/enrichment/results`
+- `POST /api/enrichment/admin/quote` (admin quote + optional payment code issuance)
+
+## Schema Source of Truth + ETL
+- Manage app/enrichment tables via Drizzle (`db:generate`, `db:push`).
+- Keep ETL script focused on ACRA mirror tables and `active_entities` view lifecycle.
+- Keep shared column types aligned between ETL bootstrap and Drizzle schema.
+- In fresh environments, run schema migration before enrichment endpoint usage.
 
 ## Frontend UX (Planned)
 In `SearchPanel`:
