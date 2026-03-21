@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
@@ -19,6 +19,7 @@ function toResponse(row: {
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
   paymentCodeId: number | null;
+  issuedCode: string | null;
   requestedAt: Date;
   codeIssuedAt: Date | null;
   redeemedAt: Date | null;
@@ -34,6 +35,7 @@ function toResponse(row: {
     projectedPaidCalls: row.projectedPaidCalls,
     estimatedPriceUsd: row.estimatedPriceUsd / 100,
     paymentCodeId: row.paymentCodeId,
+    issuedCode: row.issuedCode,
     requestedAt: row.requestedAt.toISOString(),
     codeIssuedAt: row.codeIssuedAt ? row.codeIssuedAt.toISOString() : null,
     redeemedAt: row.redeemedAt ? row.redeemedAt.toISOString() : null,
@@ -83,6 +85,7 @@ export async function POST(request: NextRequest) {
       projectedPaidCalls: enrichmentPreflightRequests.projectedPaidCalls,
       estimatedPriceUsd: enrichmentPreflightRequests.estimatedPriceUsd,
       paymentCodeId: enrichmentPreflightRequests.paymentCodeId,
+      issuedCode: sql<string | null>`null`,
       requestedAt: enrichmentPreflightRequests.requestedAt,
       codeIssuedAt: enrichmentPreflightRequests.codeIssuedAt,
       redeemedAt: enrichmentPreflightRequests.redeemedAt,
@@ -110,6 +113,7 @@ export async function GET() {
       projectedPaidCalls: enrichmentPreflightRequests.projectedPaidCalls,
       estimatedPriceUsd: enrichmentPreflightRequests.estimatedPriceUsd,
       paymentCodeId: enrichmentPreflightRequests.paymentCodeId,
+      issuedCode: sql<string | null>`null`,
       requestedAt: enrichmentPreflightRequests.requestedAt,
       codeIssuedAt: enrichmentPreflightRequests.codeIssuedAt,
       redeemedAt: enrichmentPreflightRequests.redeemedAt,

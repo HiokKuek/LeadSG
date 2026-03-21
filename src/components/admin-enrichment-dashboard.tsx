@@ -12,6 +12,7 @@ type PreflightRequest = {
   candidateCount: number;
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
+  issuedCode: string | null;
   requestedAt: string;
 };
 
@@ -24,6 +25,24 @@ type IssuedCode = {
   code: string;
   requestId: string;
 };
+
+function getCachedQueriesCount(request: PreflightRequest): number {
+  return Math.max(request.candidateCount - request.projectedPaidCalls, 0);
+}
+
+function getExpectedCostUsd(request: PreflightRequest): number {
+  if (request.candidateCount === 0) {
+    return 0;
+  }
+
+  if (request.projectedPaidCalls === 0) {
+    return 0;
+  }
+
+  const userCostWithoutCache = (request.estimatedPriceUsd / request.projectedPaidCalls) * request.candidateCount;
+  const savingsFromCache = (request.estimatedPriceUsd / request.projectedPaidCalls) * getCachedQueriesCount(request);
+  return Math.max(userCostWithoutCache - savingsFromCache, 0);
+}
 
 export function AdminEnrichmentDashboard() {
   const [adminRequests, setAdminRequests] = useState<PreflightRequest[]>([]);
@@ -225,8 +244,9 @@ export function AdminEnrichmentDashboard() {
                 <tr className="border-b border-zinc-200 bg-zinc-50">
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">User</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">SSIC Codes</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Est. Cost</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">API Calls</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">API Calls Required</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Cached Queries</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Expected Cost</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Action</th>
                 </tr>
@@ -247,11 +267,14 @@ export function AdminEnrichmentDashboard() {
                   >
                     <td className="px-6 py-4 text-sm text-zinc-900 font-medium">{request.userEmail}</td>
                     <td className="px-6 py-4 text-sm text-zinc-600 font-mono">{request.ssicCodes.join(", ")}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
-                      USD {request.estimatedPriceUsd.toFixed(2)}
-                    </td>
                     <td className="px-6 py-4 text-sm text-zinc-600">
                       {request.projectedPaidCalls.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-600">
+                      {getCachedQueriesCount(request).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
+                      USD {getExpectedCostUsd(request).toFixed(2)}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
@@ -328,14 +351,20 @@ export function AdminEnrichmentDashboard() {
                 {/* Highlights */}
                 <div className="grid grid-cols-2 gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div>
-                    <p className="text-xs text-blue-900 font-semibold mb-1">User Cost</p>
-                    <p className="text-xl font-bold text-blue-600">USD {selectedRequest.estimatedPriceUsd.toFixed(2)}</p>
-                  </div>
-                  <div>
                     <p className="text-xs text-blue-900 font-semibold mb-1">API Calls</p>
                     <p className="text-xl font-bold text-blue-600">
                       {selectedRequest.projectedPaidCalls.toLocaleString()}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-900 font-semibold mb-1">Cached Queries</p>
+                    <p className="text-xl font-bold text-blue-600">
+                      {getCachedQueriesCount(selectedRequest).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-900 font-semibold mb-1">Expected Cost</p>
+                    <p className="text-xl font-bold text-blue-600">USD {getExpectedCostUsd(selectedRequest).toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-blue-900 font-semibold mb-1">Companies</p>
@@ -350,7 +379,7 @@ export function AdminEnrichmentDashboard() {
                 </div>
 
                 {/* Code Section */}
-                {issuedCode ? (
+                {issuedCode ?? selectedRequest.issuedCode ? (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -358,17 +387,17 @@ export function AdminEnrichmentDashboard() {
                   >
                     <p className="text-xs font-semibold text-green-900 mb-2">Issued Code</p>
                     <div
-                      onClick={() => copyCode(issuedCode.code)}
+                      onClick={() => copyCode((issuedCode?.code ?? selectedRequest.issuedCode) as string)}
                       onMouseLeave={() => setCopiedCodeId(null)}
                       className="flex items-center justify-between gap-2 p-3 bg-white border border-green-300 rounded-lg cursor-pointer hover:bg-green-50 transition-colors group"
                     >
                       <code className="font-mono text-sm font-bold text-green-700 tracking-wider">
-                        {issuedCode.code}
+                        {issuedCode?.code ?? selectedRequest.issuedCode}
                       </code>
                       <motion.div
-                        animate={copiedCodeId === issuedCode.code ? { scale: 1 } : { scale: 0.8 }}
+                        animate={copiedCodeId === (issuedCode?.code ?? selectedRequest.issuedCode) ? { scale: 1 } : { scale: 0.8 }}
                       >
-                        {copiedCodeId === issuedCode.code ? (
+                        {copiedCodeId === (issuedCode?.code ?? selectedRequest.issuedCode) ? (
                           <Check className="w-4 h-4 text-green-600" />
                         ) : (
                           <Copy className="w-4 h-4 text-zinc-400 group-hover:text-green-600 transition-colors" />

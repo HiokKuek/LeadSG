@@ -1,9 +1,9 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
-import { enrichmentPreflightRequests } from "@/lib/schema";
+import { enrichmentPreflightRequests, paymentCodes } from "@/lib/schema";
 import type { EnrichmentPreflightRequestResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -18,6 +18,7 @@ function toResponse(row: {
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
   paymentCodeId: number | null;
+  issuedCode: string | null;
   requestedAt: Date;
   codeIssuedAt: Date | null;
   redeemedAt: Date | null;
@@ -33,6 +34,7 @@ function toResponse(row: {
     projectedPaidCalls: row.projectedPaidCalls,
     estimatedPriceUsd: row.estimatedPriceUsd / 100,
     paymentCodeId: row.paymentCodeId,
+    issuedCode: row.issuedCode,
     requestedAt: row.requestedAt.toISOString(),
     codeIssuedAt: row.codeIssuedAt ? row.codeIssuedAt.toISOString() : null,
     redeemedAt: row.redeemedAt ? row.redeemedAt.toISOString() : null,
@@ -57,12 +59,14 @@ export async function GET() {
       projectedPaidCalls: enrichmentPreflightRequests.projectedPaidCalls,
       estimatedPriceUsd: enrichmentPreflightRequests.estimatedPriceUsd,
       paymentCodeId: enrichmentPreflightRequests.paymentCodeId,
+      issuedCode: paymentCodes.code,
       requestedAt: enrichmentPreflightRequests.requestedAt,
       codeIssuedAt: enrichmentPreflightRequests.codeIssuedAt,
       redeemedAt: enrichmentPreflightRequests.redeemedAt,
       startedAt: enrichmentPreflightRequests.startedAt,
     })
     .from(enrichmentPreflightRequests)
+    .leftJoin(paymentCodes, eq(paymentCodes.id, enrichmentPreflightRequests.paymentCodeId))
     .orderBy(desc(enrichmentPreflightRequests.requestedAt));
 
   return NextResponse.json({

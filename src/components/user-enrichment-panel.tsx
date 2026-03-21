@@ -19,6 +19,7 @@ type PreflightRequest = {
   candidateCount: number;
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
+  issuedCode: string | null;
   requestedAt: string;
 };
 
@@ -275,12 +276,6 @@ export function UserEnrichmentPanel() {
                   <span className="text-sm text-zinc-600">Companies found</span>
                   <span className="font-semibold text-zinc-900">
                     {preflight.candidateCount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-zinc-50 rounded-lg">
-                  <span className="text-sm text-zinc-600">API calls needed</span>
-                  <span className="font-semibold text-zinc-900">
-                    {preflight.projectedPaidCalls.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg border border-blue-200">

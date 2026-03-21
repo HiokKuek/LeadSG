@@ -33,6 +33,7 @@ export type EnrichmentPreflightRequestResponse = {
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
   paymentCodeId: number | null;
+  issuedCode: string | null;
   requestedAt: string;
   codeIssuedAt: string | null;
   redeemedAt: string | null;
