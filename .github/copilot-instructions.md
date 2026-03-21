@@ -413,5 +413,39 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
 
 ---
 
-**Last Updated**: 21 March 2026 (Phase 3 Complete)  
-**Context**: User-friendly redesign with full admin dashboard, animations, and streamlined workflow
+## Phase 4: Landing Page Simplification (March 2026)
+
+### Homepage UX Decisions (Locked)
+1. **Unified hero for all users**
+    - Both authenticated and unauthenticated users see the same headline: `LeadSG 📞`
+    - Removed authenticated-only hero variants from Phase 3 homepage experiments
+
+2. **Guest CTA moved below search panel**
+    - On unauthenticated view, keep main search experience first
+    - Show guest-only CTA block *after* `SearchPanel`:
+       - Message: "Sign up to unlock advanced features like contact enrichment and bulk data export."
+       - Primary button: "Get Started Free →" linking to `/sign-up`
+
+3. **Footer branding**
+    - Add footer text: `Built by HiokKuek {currentYear}`
+    - Include pulsating heart animation via utility class (`animate-pulse-heart`)
+
+### Implementation Notes (Phase 4)
+- `src/app/page.tsx`
+   - Keep single `LeadSG 📞` header regardless of auth state
+   - Keep `EnrichmentControls` gated behind authentication
+   - Render guest CTA block only when `!userId`
+   - Render footer at page bottom with dynamic year
+- `src/app/globals.css`
+   - Define `@keyframes pulse-heart`
+   - Register `.animate-pulse-heart` in `@layer utilities`
+
+### Guardrails for Future Edits
+- Do not re-introduce different hero headlines for authenticated users unless explicitly requested.
+- Keep guest sign-up motivation below the SSIC search block to preserve search-first UX.
+- Keep footer text and pulsating heart treatment as default branding.
+
+---
+
+**Last Updated**: 21 March 2026 (Phase 4 Complete)  
+**Context**: Enrichment dashboard retained; homepage simplified to a unified LeadSG hero, guest CTA below search, and branded footer animation
