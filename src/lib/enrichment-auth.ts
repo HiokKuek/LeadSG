@@ -1,56 +1,38 @@
-import { getServerSession } from "next-auth";
-import type { NextRequest } from "next/server";
-
-import { authOptions } from "@/lib/auth-options";
-import { getDb } from "@/lib/db";
-import { users } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
 export type AuthenticatedUser = {
-  id: number;
+  id: string;
   email: string;
   tier: string;
-  isActive: boolean;
+  role: string;
+  isAdmin: boolean;
 };
 
 export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> {
-  const session = await getServerSession(authOptions);
-  const sessionUserId = session?.user?.id;
-  if (!sessionUserId) {
+  const { userId } = await auth();
+  if (!userId) {
     return null;
   }
 
-  const userId = Number.parseInt(sessionUserId, 10);
-  if (!Number.isFinite(userId) || userId <= 0) {
+  const user = await currentUser();
+  if (!user) {
     return null;
   }
 
-  const db = getDb();
-  const rows = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      tier: users.tier,
-      isActive: users.isActive,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  const metadata = user.publicMetadata as { tier?: string } | undefined;
+  const tier = metadata?.tier ?? "free";
+  const role = typeof user.publicMetadata?.role === "string"
+    ? user.publicMetadata.role
+    : "user";
+  const primaryEmail = user.emailAddresses.find(
+    (email) => email.id === user.primaryEmailAddressId,
+  )?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? "";
 
-  const user = rows[0];
-  if (!user || !user.isActive) {
-    return null;
-  }
-
-  return user;
-}
-
-export function isAdminRequestAuthorized(request: NextRequest): boolean {
-  const configuredKey = process.env.ENRICHMENT_ADMIN_API_KEY;
-  if (!configuredKey) {
-    return false;
-  }
-
-  const supplied = request.headers.get("x-admin-key")?.trim();
-  return Boolean(supplied && supplied === configuredKey);
+  return {
+    id: userId,
+    email: primaryEmail,
+    tier,
+    role,
+    isAdmin: role === "admin",
+  };
 }

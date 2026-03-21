@@ -17,6 +17,28 @@ export type EnrichmentPreflightResponse = {
   estimatedPriceUsd: number;
 };
 
+export type EnrichmentPreflightRequestStatus =
+  | "requested"
+  | "code_issued"
+  | "ready_to_start"
+  | "started";
+
+export type EnrichmentPreflightRequestResponse = {
+  requestId: string;
+  userId: string;
+  userEmail: string;
+  ssicCodes: string[];
+  status: EnrichmentPreflightRequestStatus;
+  candidateCount: number;
+  projectedPaidCalls: number;
+  estimatedPriceUsd: number;
+  paymentCodeId: number | null;
+  requestedAt: string;
+  codeIssuedAt: string | null;
+  redeemedAt: string | null;
+  startedAt: string | null;
+};
+
 export type EnrichmentAdminQuoteResponse = {
   ssicCodes: string[];
   candidateCount: number;
@@ -31,6 +53,7 @@ export type EnrichmentAdminQuoteResponse = {
 };
 
 export type EnrichmentRedeemRequest = {
+  preflightRequestId: string;
   code: string;
 };
 
@@ -42,7 +65,7 @@ export type EnrichmentRedeemResponse = {
 };
 
 export type EnrichmentJobCreateRequest = {
-  ssicCodes: string[];
+  preflightRequestId: string;
 };
 
 export type EnrichmentJobStatus =
@@ -87,4 +110,10 @@ export type EnrichmentResultRow = {
 export type EnrichmentResultsResponse = {
   data: EnrichmentResultRow[];
   totalMatching: number;
+};
+
+export type EnrichmentInternalQuotaResponse = {
+  remainingDetailCalls: number;
+  updatedByUserId: string | null;
+  updatedAt: string;
 };

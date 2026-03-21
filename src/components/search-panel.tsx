@@ -88,7 +88,7 @@ export function SearchPanel() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [totalMatching, setTotalMatching] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(20);
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);

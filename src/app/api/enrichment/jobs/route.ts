@@ -4,11 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
 import {
-  buildPreflightEstimate,
-  getLatestRedeemedCodeWithQuota,
-  ssicListSchema,
+  preflightRequestIdSchema,
 } from "@/lib/enrichment";
-import { enrichmentJobs, paymentCodes } from "@/lib/schema";
+import { enrichmentJobs, enrichmentPreflightRequests, paymentCodes } from "@/lib/schema";
 import type { EnrichmentJobResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -54,43 +52,89 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
-  const parsed = ssicListSchema.safeParse(body);
+  const parsed = preflightRequestIdSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid payload. Expected ssicCodes as an array of 5-digit strings." },
+      { error: "Invalid payload. Expected preflightRequestId." },
       { status: 400 },
     );
   }
 
   const db = getDb();
-  const estimate = await buildPreflightEstimate(db, parsed.data.ssicCodes);
+  const preflightRows = await db
+    .select({
+      id: enrichmentPreflightRequests.id,
+      userId: enrichmentPreflightRequests.userId,
+      ssicList: enrichmentPreflightRequests.ssicList,
+      status: enrichmentPreflightRequests.status,
+      candidateCount: enrichmentPreflightRequests.candidateCount,
+      projectedPaidCalls: enrichmentPreflightRequests.projectedPaidCalls,
+      estimatedPriceUsd: enrichmentPreflightRequests.estimatedPriceUsd,
+      paymentCodeId: enrichmentPreflightRequests.paymentCodeId,
+    })
+    .from(enrichmentPreflightRequests)
+    .where(eq(enrichmentPreflightRequests.id, parsed.data.preflightRequestId))
+    .limit(1);
 
-  const redeemedCode = await getLatestRedeemedCodeWithQuota(db, user.id);
-  if (!redeemedCode && estimate.projectedPaidCalls > 0) {
+  const preflight = preflightRows[0];
+  if (!preflight || preflight.userId !== user.id) {
+    return NextResponse.json({ error: "Preflight request not found." }, { status: 404 });
+  }
+
+  if (preflight.status === "started") {
+    return NextResponse.json({ error: "Preflight request already used to start a job." }, { status: 409 });
+  }
+
+  if (preflight.status !== "ready_to_start") {
     return NextResponse.json(
-      { error: "No redeemed payment code with available quota found." },
+      { error: "Preflight request is not ready to start. Redeem assigned payment code first." },
+      { status: 409 },
+    );
+  }
+
+  if (!preflight.paymentCodeId && preflight.projectedPaidCalls > 0) {
+    return NextResponse.json(
+      { error: "Preflight request has no assigned payment code." },
       { status: 402 },
     );
   }
 
-  if (redeemedCode && redeemedCode.remainingDetailCalls < estimate.projectedPaidCalls) {
+  let paymentCodeForReservation: {
+    id: number;
+    remainingDetailCalls: number;
+  } | null = null;
+
+  if (preflight.paymentCodeId) {
+    const paymentCodeRows = await db
+      .select({
+        id: paymentCodes.id,
+        remainingDetailCalls: paymentCodes.remainingDetailCalls,
+      })
+      .from(paymentCodes)
+      .where(eq(paymentCodes.id, preflight.paymentCodeId))
+      .limit(1);
+
+    paymentCodeForReservation = paymentCodeRows[0] ?? null;
+  }
+
+  if (paymentCodeForReservation && paymentCodeForReservation.remainingDetailCalls < preflight.projectedPaidCalls) {
     return NextResponse.json(
       {
         error: "Insufficient remaining quota for this enrichment run.",
-        requiredPaidCalls: estimate.projectedPaidCalls,
-        remainingPaidCalls: redeemedCode.remainingDetailCalls,
+        requiredPaidCalls: preflight.projectedPaidCalls,
+        remainingPaidCalls: paymentCodeForReservation.remainingDetailCalls,
       },
       { status: 402 },
     );
   }
 
   const jobId = crypto.randomUUID();
-  const reservedPaidCalls = estimate.projectedPaidCalls;
-  const estimatedMaxCostUsdCents = Math.round(estimate.projectedMaxCostUsd * 100);
+  const reservedPaidCalls = preflight.projectedPaidCalls;
+  const estimatedMaxCostUsdCents = preflight.estimatedPriceUsd;
 
   const job = await db.transaction(async (tx) => {
-    if (redeemedCode && reservedPaidCalls > 0) {
+    if (paymentCodeForReservation && reservedPaidCalls > 0) {
       const updated = await tx
         .update(paymentCodes)
         .set({
@@ -99,7 +143,7 @@ export async function POST(request: NextRequest) {
         })
         .where(
           and(
-            eq(paymentCodes.id, redeemedCode.paymentCodeId),
+            eq(paymentCodes.id, paymentCodeForReservation.id),
             gte(paymentCodes.remainingDetailCalls, reservedPaidCalls),
           ),
         )
@@ -115,12 +159,14 @@ export async function POST(request: NextRequest) {
       .values({
         id: jobId,
         userId: user.id,
-        paymentCodeId: redeemedCode?.paymentCodeId ?? null,
-        ssicList: parsed.data.ssicCodes,
+        preflightRequestId: preflight.id,
+        paymentCodeId: preflight.paymentCodeId,
+        initiatedByAdmin: false,
+        ssicList: preflight.ssicList,
         status: "queued",
-        estimatedCandidateCount: estimate.candidateCount,
-        estimatedCacheHitCount: estimate.cacheHitCount,
-        estimatedPaidCalls: estimate.projectedPaidCalls,
+        estimatedCandidateCount: preflight.candidateCount,
+        estimatedCacheHitCount: Math.max(preflight.candidateCount - preflight.projectedPaidCalls, 0),
+        estimatedPaidCalls: preflight.projectedPaidCalls,
         reservedPaidCalls,
         consumedPaidCalls: 0,
         estimatedMaxCostUsd: estimatedMaxCostUsdCents,
@@ -141,6 +187,20 @@ export async function POST(request: NextRequest) {
         startedAt: enrichmentJobs.startedAt,
         finishedAt: enrichmentJobs.finishedAt,
       });
+
+    await tx
+      .update(enrichmentPreflightRequests)
+      .set({
+        status: "started",
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(enrichmentPreflightRequests.id, preflight.id),
+          eq(enrichmentPreflightRequests.userId, user.id),
+        ),
+      );
 
     return inserted[0];
   });

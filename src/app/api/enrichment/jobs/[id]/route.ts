@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
@@ -9,7 +9,6 @@ import type { EnrichmentJobResponse } from "@/lib/types";
 export const runtime = "nodejs";
 
 export async function GET(
-  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getAuthenticatedUser();

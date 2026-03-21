@@ -244,6 +244,9 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
 4. **Code redemption required**: user must redeem a unique admin-issued code tied to their authenticated account before job start
 5. **Cache-first behavior**: enrichment results must be cached in Postgres and reused for subsequent queries
 6. **Hard budget controls**: enforce account/code/global limits before and during paid Google calls
+7. **Admin identity source**: admin access is from Clerk metadata only (`publicMetadata.role = "admin"`)
+8. **Payment code scope**: payment code is single-use and bound to one confirmed preflight request
+9. **Admin bypass budget**: admin bypass starts consume internal quota pool detail calls
 
 ### Google API Cost Strategy
 1. Text Search (`places.id` field mask only) first
@@ -255,26 +258,41 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
    - projected paid calls and estimated max cost
 
 ### Planned Data Model Additions
-- `users`
 - `payment_codes`
 - `payment_code_redemptions`
+- `enrichment_preflight_requests`
+- `enrichment_internal_quota`
 - `company_contact_enrichment` (keyed by `uen`, matched to `active_entities.uen`)
 - `enrichment_jobs`
 - `enrichment_job_items`
 
+### Authentication Provider
+- Use Clerk for hosted authentication, user management dashboard, and social/email-password sign-in.
+- Treat Clerk as identity source of truth; app DB stores domain data only.
+- Store user tier in Clerk metadata (`publicMetadata.tier`) for authorization decisions.
+
 ### Planned API Additions
 - `POST /api/enrichment/preflight`
+- `POST /api/enrichment/preflight/requests`
+- `GET /api/enrichment/preflight/requests`
 - `POST /api/enrichment/redeem`
 - `POST /api/enrichment/jobs`
 - `GET /api/enrichment/jobs/:id`
 - `GET /api/enrichment/results`
 - `POST /api/enrichment/admin/quote` (admin-only quote + optional code issuance)
+- `GET /api/enrichment/admin/preflight-requests`
+- `POST /api/enrichment/admin/preflight-requests/:id/issue-code`
+- `POST /api/enrichment/admin/preflight-requests/:id/start`
+- `GET/PATCH /api/enrichment/admin/internal-quota`
 
 ### API Behavior Notes (Phase 2)
 - `/api/enrichment/preflight` is user-facing and should not expose cache hit/miss internals
 - User preflight response should provide estimated payable amount based on Google pricing model
 - Admin quote endpoint can expose cache-aware economics (`estimated user charge`, `estimated provider cost`, margin)
 - Admin quote endpoint can issue payment codes after manual payment confirmation
+- User must confirm preflight request before payment code step
+- User can only start job from `ready_to_start` preflight request
+- Admin bypass start is allowed but must atomically decrement internal quota pool
 
 ### Execution Architecture
 - Keep existing search API contract stable and additive
@@ -295,5 +313,105 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
 
 ---
 
-**Last Updated**: 20 March 2026  
-**Context**: Full-stack search is complete; planning started for multi-SSIC prepaid contact enrichment with cache-first async execution
+## Phase 3: User-Friendly UI/UX Implementation (March 2026)
+
+### User Workflow (Redesigned for Clarity)
+**Screen**: `EnrichmentControls` provides unified access; users see `UserEnrichmentPanel` by default
+
+1. **"Get Company Details" Hero Section**
+   - Headline: "Get Company Details (phone number + website)"
+   - Disclaimer: Note that contact information is not always available
+   - SSIC Input with "Estimate Cost" button
+
+2. **Cost Estimation Modal** (Framer Motion, smooth slide-in)
+   - Shows: company count, API calls needed, total cost
+   - Actions: "Cancel" or "Proceed to Purchase"
+
+3. **Purchase Request Creation**
+   - Clicking "Proceed" creates preflight request and auto-confirms
+   - Free requests (`projectedPaidCalls = 0`) auto-advance to `ready_to_start` instantly
+   - Paid requests (`projectedPaidCalls > 0`) advance to `requested` (awaiting admin code)
+
+4. **Request History List** (Always visible, all requests)
+   - Dropdown showing all requests with status, cost, SSIC
+   - User can review past + current requests
+
+5. **Code Redemption Section** (Conditional, appears if status = `code_issued`)
+   - Info box: "Your request is awaiting admin approval. Once approved, you'll receive a confirmation code."
+   - Button: "I Have a Confirmation Code"
+   - Multi-step verification: input field + separate "Verify" button
+   - After verification, request auto-advances to `ready_to_start`
+
+6. **Job Launch**
+   - "Start Job" button enabled when `status = ready_to_start`
+   - After clicking, shows animated success message: "Job Queued" with job ID
+   - Auto-refreshes request list
+
+### Admin Workflow (New Dedicated Dashboard Section)
+**Access**: Toggle "Admin Dashboard" button visible only to users with `publicMetadata.role = "admin"`
+
+**Screen**: `AdminEnrichmentDashboard` (full-page component, accessed via toggle)
+
+1. **Quota Header** (Gradient blue card, always visible at top)
+   - Shows: "Available Quota: {remainingDetailCalls}" in large font
+   - Inline adjustment: text input for delta (e.g., "+100", "-50") + "Apply" button
+   - Guard: SQL `greatest(..., 0)` prevents negative balances
+
+2. **Preflight Queue Table** (Animated rows with staggered entrance)
+   - Columns: User Email, SSIC Codes, Est. Cost, API Calls, Status, Actions
+   - Row styling: Highlighted when selected, hover effects
+   - Status badge colors:
+     - Blue: `requested` (awaiting code)
+     - Amber: `code_issued` (waiting for user redemption)
+     - Green: `ready_to_start` (ready to launch)
+     - Gray: `started` (job already running)
+
+3. **Details Modal** (Click any row or "Details" button)
+   - Displays: User email, SSICs, cost, API calls, candidate count, status
+   - Highlighted box showing: user charge, projected API calls
+   - **Code Section**:
+     - If code not issued: "Issue Code" button
+     - After issuance: Code displayed in green box with Copy icon
+     - Hover/click to copy code to clipboard + visual feedback
+   - **Admin Actions**:
+     - "Issue Code" button (generates single-use code, marks request `code_issued`)
+     - "Admin Bypass Start" button (charges internal quota, creates job, marks request `started`)
+
+4. **Animations & Interactions**
+   - Table rows fade in with stagger effect
+   - Modals use scale + opacity transitions
+   - Copy-to-clipboard shows brief green checkmark
+   - Code display animates in with smooth reveal
+   - Status badge color transitions on update
+
+### Component Architecture
+- **`EnrichmentControls`** (container): Manages toggle state, renders user or admin view
+- **`UserEnrichmentPanel`**: Handles user workflow (estimate, purchase, code redeem, job launch)
+- **`AdminEnrichmentDashboard`**: Handles admin workflow (queue list, code issuance, quota adjust)
+- **Animations**: Framer Motion for modals, table rows, code reveals, transitions
+
+### Dependencies Added (Phase 3)
+- `framer-motion` ^14: Smooth animations for modals, table rows, code highlights
+- Lucide React icons: Keyboard icons (ChevronDown, Copy, Check, X, Loader2, etc.)
+
+### State Management
+- All state managed locally within respective components (`useState`)
+- Request list auto-synced to database via API calls
+- No external state → clean separation of concerns
+
+### API Contract Notes (Phase 3)
+- Removed redundant `/api/enrichment/admin/quote` endpoint (replaced by request-driven flow)
+- All endpoints kept stable:
+  - User: `/api/enrichment/preflight`, `/api/enrichment/preflight/requests`, `/api/enrichment/redeem`, `/api/enrichment/jobs`
+  - Admin: `/api/enrichment/admin/preflight-requests`, `/admin/preflight-requests/[id]/issue-code`, `/admin/preflight-requests/[id]/start`, `/admin/internal-quota`
+
+### Styling & Theming
+- Tailwind CSS v4: All components use zinc/blue/green/amber color schemes
+- Gradient headers for admin quota display
+- Consistent button/input styling across user + admin panels
+- Responsive design maintains UX on smaller screens (modals scale appropriately)
+
+---
+
+**Last Updated**: 21 March 2026 (Phase 3 Complete)  
+**Context**: User-friendly redesign with full admin dashboard, animations, and streamlined workflow

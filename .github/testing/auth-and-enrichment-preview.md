@@ -1,7 +1,7 @@
 # Auth + Enrichment Preview Testing Guide
 
 This guide validates current partial implementation:
-- Auth.js login/session behavior
+- Clerk login/session behavior
 - Enrichment endpoint integration against DB schema
 - Frontend preview controls on home page
 
@@ -10,21 +10,14 @@ This guide validates current partial implementation:
 Set required variables in `.env.local`:
 
 - `DATABASE_URL`
-- `AUTH_SECRET`
-- `AUTH_TRUST_HOST=true`
-- `ENRICHMENT_ADMIN_API_KEY`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+- `CLERK_SIGN_IN_URL=/login`
+- `CLERK_SIGN_UP_URL=/sign-up`
+- `CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/`
+- `CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/`
 - `GOOGLE_PLACES_DETAILS_PRICE_PER_1000_USD` (for pricing math)
 - `ENRICHMENT_USER_PRICE_PER_1000_USD` (optional override)
-
-Notes:
-- `AUTH_SECRET` does not require any external dashboard. It is a local/server secret used by NextAuth to sign/encrypt session tokens/cookies.
-- Generate one with either command:
-
-```bash
-openssl rand -base64 32
-# or
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
 
 ## 2) Apply schema
 
@@ -34,27 +27,13 @@ Run:
 npm run db:push
 ```
 
-This ensures `users`, payment, and enrichment tables exist.
+This ensures payment and enrichment tables exist.
 
-## 3) Create a test user
+## 3) Create test users
 
-Generate password hash:
-
-```bash
-node -e "const b=require('bcryptjs'); b.hash('Password123!',10).then(h=>console.log(h))"
-```
-
-Insert user (replace hash output):
-
-```sql
-INSERT INTO users (email, password_hash, tier, is_active)
-VALUES ('tester@leadsg.local', '$2b$10$rjvZnzplkdI96scI1IKBOeFtzT7NIqf/pF3aBRDTV9HIq9/VTqyXW', 'paid', true)
-ON CONFLICT (email) DO UPDATE
-SET password_hash = EXCLUDED.password_hash,
-    tier = EXCLUDED.tier,
-    is_active = EXCLUDED.is_active,
-    updated_at = NOW();
-```
+- Use Clerk Dashboard to create users, or sign up at `/sign-up`.
+- Set user tier via Clerk `publicMetadata.tier` (for example `free`, `pro`, `premium`).
+- Set admin role via Clerk `publicMetadata.role = "admin"`.
 
 ## 4) Run app
 
@@ -65,28 +44,26 @@ npm run dev
 ## 5) Visual test checklist
 
 1. Open `/` and verify unauthenticated state shows **Sign in**.
-2. Go to `/login`, sign in with test credentials.
+2. Go to `/login`, sign in with Clerk credentials.
 3. Return to `/` and verify signed-in email+tier appear.
 4. Verify **Enrichment (Preview Controls)** panel is visible only when signed in.
-5. In panel, input SSIC list (e.g. `62011,62012`) and run preflight.
-6. Confirm preflight response shows candidate count, projected paid calls, estimated price.
-7. Redeem a payment code and start a job (after creating/issuing one).
-8. Refresh job status and confirm no 401/500 errors.
+5. In panel, input SSIC list (e.g. `62011,62012`) and run preflight estimate.
+6. Confirm preflight request and verify it appears in "Your confirmed preflight requests".
+7. As admin, issue single-use payment code for that request from admin dashboard queue.
+8. As normal user, select request, redeem issued code, then start job.
+9. Refresh job status and confirm no 401/500 errors.
 
-## 6) Admin quote + code issue test
+## 6) Admin queue + quota test
 
-Example request:
-
-```bash
-curl -X POST http://localhost:3000/api/enrichment/admin/quote \
-  -H 'Content-Type: application/json' \
-  -H "x-admin-key: replace-with-strong-admin-key" \
-  -d '{"ssicCodes":["62011","62012"],"issueCode":true,"purchasedDetailCalls":200}'
-```
+- Sign in as admin and verify:
+  - internal quota pool is visible,
+  - quota adjustment works (positive and negative deltas),
+  - preflight queue shows requester email,
+  - issue code and admin bypass start actions are available.
 
 Expected:
-- Returns estimated user charge/cost/margin.
-- Returns `paymentCode` when `issueCode=true`.
+- Admin-issued code is bound to one preflight request and one user.
+- Admin bypass start decrements internal quota and fails when quota is insufficient.
 
 ## 7) Current known limitation
 

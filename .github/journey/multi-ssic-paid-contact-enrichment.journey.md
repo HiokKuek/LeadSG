@@ -50,8 +50,25 @@
 - Decision retained: Drizzle is source of truth for app/enrichment tables; ETL remains focused on ACRA mirror workflow.
 
 ### Phase 2.5 progress update (Auth + frontend controls)
-- Integrated Auth.js credentials flow with session-based auth.
-- Replaced temporary `x-user-id` enrichment auth with session-derived user resolution.
+- Migrated auth to Clerk hosted identity flow (email/password + social providers supported by Clerk config).
+- Replaced temporary `x-user-id` and NextAuth session resolution with Clerk server auth.
 - Added login page and homepage auth controls for visual testing.
 - Added preview enrichment controls UI to exercise preflight/redeem/job endpoints from browser.
-- Added `users.password_hash` schema support and generated follow-up migration.
+- Removed app-managed credentials requirement and switched enrichment ownership to Clerk user IDs.
+
+## 2026-03-21
+
+### Phase 3 progress update (Role-based admin queue + internal quota)
+- Switched admin authorization from shared header key to Clerk metadata role (`publicMetadata.role = "admin"`).
+- Added persisted preflight request queue with clear lifecycle:
+  - `requested` → `code_issued` → `ready_to_start` → `started`
+- Bound payment code redemption to both user account and specific preflight request (single-use per request).
+- Added admin endpoints and dashboard capabilities:
+  - view preflight queue with requester details
+  - issue request-bound payment code
+  - view and adjust internal quota pool
+  - admin bypass start that decrements internal quota
+- Updated user dashboard flow to explicit steps:
+  1) estimate + confirm preflight request
+  2) select request + redeem code
+  3) start job only when request is ready

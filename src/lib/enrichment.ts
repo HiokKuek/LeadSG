@@ -34,7 +34,21 @@ export const ssicListSchema = z.object({
 });
 
 export const redeemCodeSchema = z.object({
+  preflightRequestId: z.string().trim().min(8).max(64),
   code: z.string().trim().min(6).max(64),
+});
+
+export const preflightRequestIdSchema = z.object({
+  preflightRequestId: z.string().trim().min(8).max(64),
+});
+
+export const adminIssueCodeSchema = z.object({
+  preflightRequestId: z.string().trim().min(8).max(64),
+  expiresInDays: z.coerce.number().int().min(1).max(365).optional(),
+});
+
+export const adminAdjustInternalQuotaSchema = z.object({
+  detailCallsDelta: z.coerce.number().int(),
 });
 
 export const adminQuoteSchema = z.object({
@@ -119,7 +133,7 @@ export async function buildPreflightEstimate(
   };
 }
 
-export async function getLatestRedeemedCodeWithQuota(db: Db, userId: number) {
+export async function getLatestRedeemedCodeWithQuota(db: Db, userId: string) {
   const now = new Date();
 
   const rows = await db

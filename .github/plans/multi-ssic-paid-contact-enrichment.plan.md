@@ -14,14 +14,20 @@ Add an authenticated, prepaid enrichment workflow where users select one or more
 ## Proposed Architecture
 
 ### 1) Auth and access
-- Add account auth via Auth.js.
+- Add account auth via Clerk.
+- Add admin role from Clerk metadata only (`publicMetadata.role`).
 - Add paid gating at enrichment endpoints only.
 - Keep search endpoints unchanged initially.
 
 ### 2) Prepaid code model
 - Add payment code issuance and redemption tables.
-- Bind code redemption to exactly one authenticated account.
+- Bind code redemption to exactly one authenticated account and one confirmed preflight request.
 - Track purchased/remaining paid-call quota.
+
+### 2.1) Preflight request queue model
+- Persist user-confirmed preflight requests with statuses (`requested`, `code_issued`, `ready_to_start`, `started`).
+- Require request readiness before user job start.
+- Expose admin queue with requester identity and request state.
 
 ### 3) Cache-first enrichment
 - Add `company_contact_enrichment` table keyed by `uen`.
@@ -51,7 +57,8 @@ Add an authenticated, prepaid enrichment workflow where users select one or more
 - Hard-stop guards:
   - user quota
   - redeemed-code quota
-  - global monthly cap
+  - admin internal quota pool for bypass starts
+  - optional global monthly cap
 - Atomic quota reservation at job start.
 
 ### 6) Logging and auditability
@@ -60,20 +67,27 @@ Add an authenticated, prepaid enrichment workflow where users select one or more
 - Include stop reasons (`budget_exceeded`, `quota_exhausted`, etc.).
 
 ## Data Model (Planned)
-- `users`
 - `payment_codes`
 - `payment_code_redemptions`
+- `enrichment_preflight_requests`
+- `enrichment_internal_quota`
 - `company_contact_enrichment`
 - `enrichment_jobs`
 - `enrichment_job_items`
 
 ## API Surface (Planned)
 - `POST /api/enrichment/preflight`
+- `POST /api/enrichment/preflight/requests`
+- `GET /api/enrichment/preflight/requests`
 - `POST /api/enrichment/redeem`
 - `POST /api/enrichment/jobs`
 - `GET /api/enrichment/jobs/:id`
 - `GET /api/enrichment/results`
-- `POST /api/enrichment/admin/quote` (admin quote + optional payment code issuance)
+- `GET /api/enrichment/admin/preflight-requests`
+- `POST /api/enrichment/admin/preflight-requests/:id/issue-code`
+- `POST /api/enrichment/admin/preflight-requests/:id/start`
+- `GET/PATCH /api/enrichment/admin/internal-quota`
+- `POST /api/enrichment/admin/quote` (optional economics quote endpoint)
 
 ## Schema Source of Truth + ETL
 - Manage app/enrichment tables via Drizzle (`db:generate`, `db:push`).
@@ -114,9 +128,9 @@ In `SearchPanel`:
 - Worker restart/retry resilience on NAS
 
 ## Implementation Status (Current)
-- ✅ Drizzle schema + migrations for enrichment/payment/auth tables
-- ✅ User-facing enrichment endpoints (`preflight`, `redeem`, `jobs`, `status`, `results`)
-- ✅ Admin quote endpoint with optional payment code issuance
-- ✅ Auth.js credentials integration and session-backed endpoint auth
-- ✅ Frontend preview controls for partial visual/integration testing
+- ✅ Drizzle schema + migrations for enrichment/payment/auth + preflight queue + internal quota tables
+- ✅ User-facing enrichment endpoints (`preflight`, `preflight requests`, `redeem`, `jobs`, `status`, `results`)
+- ✅ Admin queue + role-gated actions (issue single-use code, bypass start, quota adjust)
+- ✅ Clerk integration with role-based admin authorization via metadata
+- ✅ Frontend workflow aligned to user steps (estimate → confirm request → redeem code → start)
 - ⏳ Pending: worker queue execution, Google API pipeline, final UX polish, full automated tests

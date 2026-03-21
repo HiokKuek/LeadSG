@@ -15,6 +15,20 @@
       "when": 1774016021280,
       "tag": "0001_fresh_betty_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774058057893,
+      "tag": "0002_red_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774061244036,
+      "tag": "0003_nice_black_cat",
+      "breakpoints": true
     }
   ]
 }

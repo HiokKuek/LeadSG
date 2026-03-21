@@ -32,35 +32,57 @@ export const etlMetadata = pgTable("etl_metadata", {
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).notNull(),
 });
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  email: varchar("email", { length: 255 }).notNull(),
-  passwordHash: text("password_hash"),
-  tier: varchar("tier", { length: 32 }).notNull().default("free"),
-  isActive: boolean("is_active").notNull().default(true),
+export const enrichmentPreflightRequests = pgTable("enrichment_preflight_requests", {
+  id: varchar("id", { length: 64 }).notNull().primaryKey(),
+  userId: text("user_id").notNull(),
+  userEmail: text("user_email").notNull(),
+  ssicList: jsonb("ssic_list").$type<string[]>().notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("requested"),
+  candidateCount: integer("candidate_count").notNull().default(0),
+  projectedPaidCalls: integer("projected_paid_calls").notNull().default(0),
+  estimatedPriceUsd: integer("estimated_price_usd_cents").notNull().default(0),
+  paymentCodeId: integer("payment_code_id"),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  codeIssuedAt: timestamp("code_issued_at", { withTimezone: true }),
+  redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+  startedAt: timestamp("started_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-  emailUnique: uniqueIndex("users_email_unique").on(table.email),
+  userIdIdx: index("enrichment_preflight_requests_user_id_idx").on(table.userId),
+  statusIdx: index("enrichment_preflight_requests_status_idx").on(table.status),
+  requestedAtIdx: index("enrichment_preflight_requests_requested_at_idx").on(table.requestedAt),
 }));
+
+export const enrichmentInternalQuota = pgTable("enrichment_internal_quota", {
+  id: smallint("id").notNull().primaryKey().default(1),
+  remainingDetailCalls: integer("remaining_detail_calls").notNull().default(0),
+  updatedByUserId: text("updated_by_user_id"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const paymentCodes = pgTable("payment_codes", {
   id: serial("id").primaryKey(),
   code: varchar("code", { length: 64 }).notNull(),
+  preflightRequestId: varchar("preflight_request_id", { length: 64 }),
+  issuedToUserId: text("issued_to_user_id"),
+  issuedByAdminUserId: text("issued_by_admin_user_id"),
   totalDetailCalls: integer("total_detail_calls").notNull(),
   remainingDetailCalls: integer("remaining_detail_calls").notNull(),
+  isSingleUse: boolean("is_single_use").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   codeUnique: uniqueIndex("payment_codes_code_unique").on(table.code),
+  preflightRequestIdUnique: uniqueIndex("payment_codes_preflight_request_id_unique").on(table.preflightRequestId),
 }));
 
 export const paymentCodeRedemptions = pgTable("payment_code_redemptions", {
   id: serial("id").primaryKey(),
   paymentCodeId: integer("payment_code_id").notNull().references(() => paymentCodes.id),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull(),
   redeemedAt: timestamp("redeemed_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   paymentCodeIdUnique: uniqueIndex("payment_code_redemptions_payment_code_id_unique").on(table.paymentCodeId),
@@ -91,8 +113,10 @@ export const companyContactEnrichment = pgTable("company_contact_enrichment", {
 
 export const enrichmentJobs = pgTable("enrichment_jobs", {
   id: varchar("id", { length: 64 }).notNull().primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: text("user_id").notNull(),
+  preflightRequestId: varchar("preflight_request_id", { length: 64 }).references(() => enrichmentPreflightRequests.id),
   paymentCodeId: integer("payment_code_id").references(() => paymentCodes.id),
+  initiatedByAdmin: boolean("initiated_by_admin").notNull().default(false),
   ssicList: jsonb("ssic_list").$type<string[]>().notNull(),
   status: varchar("status", { length: 32 }).notNull().default("queued"),
   estimatedCandidateCount: integer("estimated_candidate_count").notNull().default(0),

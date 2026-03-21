@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
-import { isAdminRequestAuthorized } from "@/lib/enrichment-auth";
+import { getAuthenticatedUser } from "@/lib/enrichment-auth";
 import {
   adminQuoteSchema,
   buildPaymentCode,
@@ -15,7 +15,8 @@ import type { EnrichmentAdminQuoteResponse } from "@/lib/types";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  if (!isAdminRequestAuthorized(request)) {
+  const user = await getAuthenticatedUser();
+  if (!user || !user.isAdmin) {
     return NextResponse.json({ error: "Admin authorization required." }, { status: 401 });
   }
 

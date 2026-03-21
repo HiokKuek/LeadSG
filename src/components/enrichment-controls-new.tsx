@@ -7,7 +7,6 @@ import { useState } from "react";
 import { AdminEnrichmentDashboard } from "./admin-enrichment-dashboard";
 import { UserEnrichmentPanel } from "./user-enrichment-panel";
 
-
 export function EnrichmentControls() {
   const { user } = useUser();
   const isAdmin = user?.publicMetadata?.role === "admin";
