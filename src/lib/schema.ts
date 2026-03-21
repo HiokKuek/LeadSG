@@ -124,6 +124,10 @@ export const enrichmentJobs = pgTable("enrichment_jobs", {
   estimatedPaidCalls: integer("estimated_paid_calls").notNull().default(0),
   reservedPaidCalls: integer("reserved_paid_calls").notNull().default(0),
   consumedPaidCalls: integer("consumed_paid_calls").notNull().default(0),
+  processedRows: integer("processed_rows").notNull().default(0),
+  cacheHitCount: integer("cache_hit_count").notNull().default(0),
+  phonesFoundCount: integer("phones_found_count").notNull().default(0),
+  websitesFoundCount: integer("websites_found_count").notNull().default(0),
   estimatedMaxCostUsd: integer("estimated_max_cost_usd_cents").notNull().default(0),
   stopReason: varchar("stop_reason", { length: 64 }),
   errorMessage: text("error_message"),
@@ -156,4 +160,5 @@ export const enrichmentJobItems = pgTable("enrichment_job_items", {
   jobIdIdx: index("enrichment_job_items_job_id_idx").on(table.jobId),
   uenIdx: index("enrichment_job_items_uen_idx").on(table.uen),
   statusIdx: index("enrichment_job_items_status_idx").on(table.status),
+  jobUenUnique: uniqueIndex("enrichment_job_items_job_uen_unique").on(table.jobId, table.uen),
 }));

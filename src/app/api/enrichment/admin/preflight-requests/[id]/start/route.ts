@@ -17,6 +17,10 @@ function toResponse(row: {
   estimatedPaidCalls: number;
   reservedPaidCalls: number;
   consumedPaidCalls: number;
+  processedRows: number;
+  cacheHitCount: number;
+  phonesFoundCount: number;
+  websitesFoundCount: number;
   estimatedMaxCostUsd: number;
   stopReason: string | null;
   errorMessage: string | null;
@@ -33,6 +37,20 @@ function toResponse(row: {
     estimatedPaidCalls: row.estimatedPaidCalls,
     reservedPaidCalls: row.reservedPaidCalls,
     consumedPaidCalls: row.consumedPaidCalls,
+    processedRows: row.processedRows,
+    cacheHitCount: row.cacheHitCount,
+    phonesFoundCount: row.phonesFoundCount,
+    websitesFoundCount: row.websitesFoundCount,
+    phonesFoundPercentage: row.processedRows > 0
+      ? Number.parseFloat(((row.phonesFoundCount / row.processedRows) * 100).toFixed(1))
+      : 0,
+    websitesFoundPercentage: row.processedRows > 0
+      ? Number.parseFloat(((row.websitesFoundCount / row.processedRows) * 100).toFixed(1))
+      : 0,
+    runtimeSeconds: row.startedAt && row.finishedAt
+      ? Math.max(0, Math.floor((row.finishedAt.getTime() - row.startedAt.getTime()) / 1000))
+      : null,
+    downloadPath: `/api/enrichment/jobs/${row.id}/download`,
     estimatedMaxCostUsd: row.estimatedMaxCostUsd / 100,
     stopReason: row.stopReason,
     errorMessage: row.errorMessage,
@@ -91,6 +109,10 @@ export async function POST(
     estimatedPaidCalls: number;
     reservedPaidCalls: number;
     consumedPaidCalls: number;
+    processedRows: number;
+    cacheHitCount: number;
+    phonesFoundCount: number;
+    websitesFoundCount: number;
     estimatedMaxCostUsd: number;
     stopReason: string | null;
     errorMessage: string | null;
@@ -151,6 +173,10 @@ export async function POST(
           estimatedPaidCalls: enrichmentJobs.estimatedPaidCalls,
           reservedPaidCalls: enrichmentJobs.reservedPaidCalls,
           consumedPaidCalls: enrichmentJobs.consumedPaidCalls,
+          processedRows: enrichmentJobs.processedRows,
+          cacheHitCount: enrichmentJobs.cacheHitCount,
+          phonesFoundCount: enrichmentJobs.phonesFoundCount,
+          websitesFoundCount: enrichmentJobs.websitesFoundCount,
           estimatedMaxCostUsd: enrichmentJobs.estimatedMaxCostUsd,
           stopReason: enrichmentJobs.stopReason,
           errorMessage: enrichmentJobs.errorMessage,

@@ -85,6 +85,14 @@ export type EnrichmentJobResponse = {
   estimatedPaidCalls: number;
   reservedPaidCalls: number;
   consumedPaidCalls: number;
+  processedRows: number;
+  cacheHitCount: number;
+  phonesFoundCount: number;
+  websitesFoundCount: number;
+  phonesFoundPercentage: number;
+  websitesFoundPercentage: number;
+  runtimeSeconds: number | null;
+  downloadPath: string | null;
   estimatedMaxCostUsd: number;
   stopReason: string | null;
   errorMessage: string | null;

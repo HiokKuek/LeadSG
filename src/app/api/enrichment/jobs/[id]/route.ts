@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
@@ -23,6 +23,7 @@ export async function GET(
   const rows = await db
     .select({
       id: enrichmentJobs.id,
+      userId: enrichmentJobs.userId,
       status: enrichmentJobs.status,
       ssicList: enrichmentJobs.ssicList,
       estimatedCandidateCount: enrichmentJobs.estimatedCandidateCount,
@@ -30,6 +31,10 @@ export async function GET(
       estimatedPaidCalls: enrichmentJobs.estimatedPaidCalls,
       reservedPaidCalls: enrichmentJobs.reservedPaidCalls,
       consumedPaidCalls: enrichmentJobs.consumedPaidCalls,
+      processedRows: enrichmentJobs.processedRows,
+      cacheHitCount: enrichmentJobs.cacheHitCount,
+      phonesFoundCount: enrichmentJobs.phonesFoundCount,
+      websitesFoundCount: enrichmentJobs.websitesFoundCount,
       estimatedMaxCostUsd: enrichmentJobs.estimatedMaxCostUsd,
       stopReason: enrichmentJobs.stopReason,
       errorMessage: enrichmentJobs.errorMessage,
@@ -38,11 +43,15 @@ export async function GET(
       finishedAt: enrichmentJobs.finishedAt,
     })
     .from(enrichmentJobs)
-    .where(and(eq(enrichmentJobs.id, id), eq(enrichmentJobs.userId, user.id)))
+    .where(eq(enrichmentJobs.id, id))
     .limit(1);
 
   const job = rows[0];
   if (!job) {
+    return NextResponse.json({ error: "Enrichment job not found." }, { status: 404 });
+  }
+
+  if (!user.isAdmin && job.userId !== user.id) {
     return NextResponse.json({ error: "Enrichment job not found." }, { status: 404 });
   }
 
@@ -55,6 +64,20 @@ export async function GET(
     estimatedPaidCalls: job.estimatedPaidCalls,
     reservedPaidCalls: job.reservedPaidCalls,
     consumedPaidCalls: job.consumedPaidCalls,
+    processedRows: job.processedRows,
+    cacheHitCount: job.cacheHitCount,
+    phonesFoundCount: job.phonesFoundCount,
+    websitesFoundCount: job.websitesFoundCount,
+    phonesFoundPercentage: job.processedRows > 0
+      ? Number.parseFloat(((job.phonesFoundCount / job.processedRows) * 100).toFixed(1))
+      : 0,
+    websitesFoundPercentage: job.processedRows > 0
+      ? Number.parseFloat(((job.websitesFoundCount / job.processedRows) * 100).toFixed(1))
+      : 0,
+    runtimeSeconds: job.startedAt && job.finishedAt
+      ? Math.max(0, Math.floor((job.finishedAt.getTime() - job.startedAt.getTime()) / 1000))
+      : null,
+    downloadPath: `/api/enrichment/jobs/${job.id}/download`,
     estimatedMaxCostUsd: job.estimatedMaxCostUsd / 100,
     stopReason: job.stopReason,
     errorMessage: job.errorMessage,

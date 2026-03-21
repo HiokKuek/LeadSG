@@ -447,5 +447,175 @@ psql postgres://postgres:postgres@localhost:5432/leadsg -c "SELECT last_updated_
 
 ---
 
-**Last Updated**: 21 March 2026 (Phase 4 Complete)  
-**Context**: Enrichment dashboard retained; homepage simplified to a unified LeadSG hero, guest CTA below search, and branded footer animation
+---
+
+## Worker Deployment (NAS Docker)
+
+The enrichment worker runs as a background service on OpenMediaVault (amd64) to process job queues for contact enrichment. It operates independently of the Next.js app and connects directly to the same PostgreSQL database.
+
+### Architecture Pattern: Job Queue + Polling
+
+**Job Queue Model:**
+- Jobs stored in `enrichment_jobs` table with status field: `queued` → `running` → `completed/partial_stopped_budget/failed`
+- No external queue (Redis/SQS); database is the single source of truth
+- Atomic claim via CAS (compare-and-swap) update: worker finds oldest `queued` job and atomically transitions to `running` in one transaction
+- Race-condition safe: only one worker claims each job; failed claims are retried with backoff
+
+**Processing Flow:**
+1. Worker polls database every `WORKER_POLL_INTERVAL_MS` (default 5000ms) for `queued` jobs
+2. Claims oldest job with timeout protection (5 retry attempts, exponential backoff)
+3. For each SSIC code in job:
+   - Queries candidate companies from `active_entities` by `primary_ssic_code`
+   - For each company:
+     - **Cache-first lookup**: fetch fresh (not expired) `company_contact_enrichment` row by UEN
+     - **Cache miss**: call Google Places Text Search (phone + website) → Place Details (full contact info)
+     - Retry logic: up to 5 attempts per row with exponential backoff (1s base, 2x multiplier)
+     - Resume on failure: logs error + moves to next row (partial completion allowed)
+4. Tracks metrics: processed rows, cache hits, consumed paid API calls, skipped rows (budget exhausted)
+5. Refunds unused reserved budget after job completes
+6. Updates job status and signals completion; results ready for download via `/api/enrichment/jobs/{jobId}/download`
+
+**Budget Reservation & Refund:**
+- Preflight request estimates `reservedPaidCalls` (worst-case scenario)
+- Worker atomically reserves this amount before job start
+- Cache hits save API cost but don't refund (reuse cached data)
+- After processing all candidates, refund unused reserved calls back to internal quota pool
+
+### Enrichment Worker Implementation
+
+**File**: `src/worker/enrichment-worker.ts` (~400 lines)
+
+**Key Functions:**
+- `log(level, event, payload)`: Structured JSON logging for observability (startup, claim metrics, job lifecycle, progress checkpoints, row-level failures, budget exhaustion events)
+- `claimNextJob()`: Atomic CAS loop to acquire next queued job with race-condition handling
+- `getCandidates(ssicList)`: Query `active_entities` by SSIC codes, order by entity name
+- `processJob(job)`: Main enrichment loop with cache-first lookup and Google API retry logic
+- `processClaimedJob(job)`: Try-catch wrapper; ensures budget refund on any failure
+- `runWorkerLoop()`: Infinite poll loop (or single-shot via `WORKER_RUN_ONCE` env var) with idle sleep
+
+**Logging Strategy:**
+- Structured JSON logs: timestamp, event name, context (jobId, userId, uen, error code/message)
+- Tracked events:
+  - `worker.loop.started`: Worker startup with config (poll interval, cache TTL, progress log frequency)
+  - `worker.claim.attempt/success/race_lost`: Claim loop metrics and race condition recovery
+  - `worker.job.started`: Job accepted (jobId, candidateCount, reservedPaidCalls)
+  - `worker.job.progress`: Checkpoint every N rows (configurable `WORKER_PROGRESS_LOG_EVERY_ROWS`)
+  - `worker.job.row.search_failed / details_failed`: Row-level API failures with error details
+  - `worker.job.partial_stopped_budget`: Budget exhausted during processing
+  - `worker.reservation.released / skipped`: Budget refund tracking
+  - `worker.loop.idle`: No queued jobs; worker sleeping
+
+**Cache TTL & Invalidation:**
+- Entries considered fresh if `updated_at > NOW() - ENRICHMENT_CACHE_TTL_DAYS` days
+- Default TTL: 7 days (configurable via env var)
+- Cache miss triggers Google API call; result stored with `updated_at = NOW()`
+- Stale entries trigger refresh, reducing data freshness risk
+
+### Docker Setup
+
+**Files Created:**
+- `Dockerfile.worker`: Multi-stage production image (Node 24-bookworm-slim, npm ci for reproducible builds, production NODE_ENV)
+- `docker-compose.worker.yml`: Service definition with configurable image pull and local build fallback
+- `.env.worker.example`: Template for NAS-specific environment variables
+- `.dockerignore`: Excludes unnecessary build context (.git, .next, node_modules, venv, etl, *.log, .env files)
+
+**Base Image:** Node 24-bookworm-slim (upgraded from 22 for security; resolves critical CVEs in OpenSSL/build tools)
+
+**Security & Environment:**
+- Multi-stage: deps layer (npm ci) separated from runner layer (production artifacts only)
+- Command: `npm run worker:run` (entry point defined in package.json)
+- No hardcoded secrets; all config via environment variables
+- Support for serverless: lazy DB initialization (connects only at runtime, not build time)
+
+### Environment Configuration
+
+**Required Variables:**
+- `DATABASE_URL`: PostgreSQL connection string (pooled recommended for cloud)
+- `GOOGLE_PLACES_API_KEY`: Google Places API key (enterprise SKU for Place Details pricing)
+
+**Recommended Optional:**
+- `WORKER_POLL_INTERVAL_MS` (default 5000): Time between job queue polls (ms)
+- `WORKER_RUN_ONCE` (default false): Single-shot mode for debugging (exits after one job poll cycle)
+- `ENRICHMENT_CACHE_TTL_DAYS` (default 7): Cache entry freshness threshold (days)
+- `WORKER_PROGRESS_LOG_EVERY_ROWS` (default 100): Log progress checkpoint frequency (rows)
+
+**Pricing Configuration (Optional):**
+- `GOOGLE_PLACES_DETAILS_PRICE_PER_1000_USD` (default 20): Cost per 1000 Place Details calls (USD)
+- `ENRICHMENT_USER_PRICE_PER_1000_USD` (default 20): User billing rate per 1000 calls (USD)
+- `UNICODE_NORMALIZATION_THRESHOLD` (default 0.95): String similarity threshold for deduplication
+
+**Compose/Deployment Overrides:**
+- `WORKER_IMAGE`: Docker image URI for registry pull (overrides local build; example: `ghcr.io/hiokkuek/leadsg-worker:latest`)
+- `DOCKER_PLATFORM`: Multi-arch override for docker-compose (default linux/amd64)
+
+### Build & Deployment Workflow
+
+**Local Development:**
+```bash
+npm run worker:dev  # Run TypeScript worker directly (requires .env.local)
+NODE_OPTIONS=--inspect npm run worker:dev  # Debug with DevTools
+```
+
+**Build for Registry (amd64 from arm Mac):**
+1. Create buildx builder once:
+   ```bash
+   docker buildx create --name leadsg-builder --use --bootstrap
+   ```
+
+2. Build and push to GHCR:
+   ```bash
+   docker buildx build \
+     --platform linux/amd64 \
+     -f Dockerfile.worker \
+     -t ghcr.io/hiokkuek/leadsg-worker:latest \
+     --push \
+     .
+   ```
+
+**NAS Deployment:**
+1. Copy `.env.worker` to NAS with required vars (DATABASE_URL, GOOGLE_PLACES_API_KEY)
+2. Pull image and start service:
+   ```bash
+   docker compose -f docker-compose.worker.yml pull
+   docker compose -f docker-compose.worker.yml up -d
+   ```
+
+3. Verify logs:
+   ```bash
+   docker compose -f docker-compose.worker.yml logs -f enrichment-worker
+   ```
+
+4. Update to latest image:
+   ```bash
+   docker compose -f docker-compose.worker.yml pull
+   docker compose -f docker-compose.worker.yml up -d
+   ```
+
+**NAS Notes:**
+- Worker restarts automatically on container failure (restart policy: unless-stopped)
+- Logs streamed to stdout (JSON format for container aggregation)
+- No persistent storage needed (state managed entirely in Postgres)
+- Network: must reach PostgreSQL host via `DATABASE_URL`
+
+### Job Submission to Worker
+
+**User Workflow:**
+1. User selects SSIC codes and clicks "Get Company Details"
+2. Frontend calls `POST /api/enrichment/preflight` → estimates cost (cache hits vs. paid calls)
+3. User reviews cost and clicks "Proceed to Purchase"
+4. Backend creates `enrichment_preflight_requests` entry (status: `requested`)
+5. Admin approves preflight and issues payment code (marks status: `code_issued`)
+6. User enters code via `POST /api/enrichment/redeem` (marks status: `ready_to_start`)
+7. User clicks "Start Job" → `POST /api/enrichment/jobs` creates job row (status: `queued`, reserved budget locked)
+8. Worker polls, claims job, processes enrichment
+9. Results available via `GET /api/enrichment/jobs/{jobId}` and `GET /api/enrichment/jobs/{jobId}/download`
+
+**Job Status Inference:**
+- Clients poll `/api/enrichment/jobs/{jobId}` to check progress
+- Worker updates status: queued → running → completed/failed/partial_stopped_budget
+- Results (CSV) available only after status transitions from running (partial or completed)
+
+---
+
+**Last Updated**: 21 March 2026 (Worker Deployment Phase Complete)  
+**Context**: Enrichment worker deployed on NAS with comprehensive Docker setup, structured JSON logging, cache-first processing, budget management, and atomic job queue pattern. README.md updated with complete deployment instructions.

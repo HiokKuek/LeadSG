@@ -1,0 +1,5 @@
+services:
+  enrichment-worker:
+    image: ghcr.io/hiokkuek/leadsg-worker:latest
+    restart: unless-stopped
+    command: npm run worker:run
