@@ -12,11 +12,11 @@ export default async function Home() {
   const { userId } = await auth();
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center px-6 py-12 sm:py-24">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center px-4 py-10 sm:px-6 sm:py-24">
       <AuthControls />
       
-      <header className="mb-12 w-full text-center">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900">
+      <header className="mb-10 w-full text-center sm:mb-12">
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-5xl">
           LeadSG 📞
         </h1>
         <p className="mt-3 text-base text-zinc-600 sm:text-lg">
@@ -29,13 +29,13 @@ export default async function Home() {
       </Suspense>
 
       {!userId && (
-        <div className="mt-8 text-center max-w-2xl mx-auto">
+        <div className="mt-8 w-full max-w-2xl mx-auto text-center">
           <p className="text-base text-zinc-500 mb-4">
             Sign up to unlock advanced features like contact enrichment and bulk data export.
           </p>
           <Link
             href="/sign-up"
-            className="inline-block rounded-lg bg-blue-600 hover:bg-blue-700 px-8 py-3 text-lg font-semibold text-white transition-colors"
+            className="inline-block rounded-lg bg-blue-600 hover:bg-blue-700 px-6 py-2.5 text-base font-semibold text-white transition-colors sm:px-8 sm:py-3 sm:text-lg"
           >
             Get Started Free →
           </Link>

@@ -344,7 +344,7 @@ export function SearchPanel() {
   }, [isDownloading, isSignedIn, isValidSsic, normalizedSsic, totalMatching]);
 
   return (
-    <section className="flex w-full flex-col items-center gap-8">
+    <section className="flex w-full flex-col items-center gap-6 sm:gap-8">
       <div className="w-full max-w-xl space-y-2">
         <Input
           type="text"
@@ -361,7 +361,7 @@ export function SearchPanel() {
           className="h-12 rounded-lg"
         />
         <p className="text-sm text-zinc-500">Enter a 5-digit SSIC code.</p>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-zinc-600">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-zinc-600 sm:gap-x-6">
           <p className="inline-flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden />
             Number of Live companies: {totalLiveCompanies.toLocaleString()}
@@ -396,7 +396,7 @@ export function SearchPanel() {
 
               {!isSignedIn ? (
                 <div
-                  className={`pointer-events-none absolute top-full right-0 z-20 mt-2 w-max max-w-[240px] rounded-md bg-zinc-900 px-3 py-1.5 text-xs text-white shadow-sm transition-all duration-200 ${
+                  className={`pointer-events-none absolute top-full right-0 z-20 mt-2 w-max max-w-[90vw] whitespace-normal rounded-md bg-zinc-900 px-3 py-1.5 text-xs text-white shadow-sm transition-all duration-200 sm:max-w-[240px] ${
                     showAuthHint
                       ? "translate-y-0 opacity-100"
                       : "-translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100"
@@ -409,7 +409,8 @@ export function SearchPanel() {
           ) : null}
         </div>
 
-        <Table>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[640px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[180px]">UEN</TableHead>
@@ -459,7 +460,8 @@ export function SearchPanel() {
               </TableRow>
             ) : null}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
         {isLoadingPage ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/55">
             <div className="flex items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm">
@@ -471,7 +473,7 @@ export function SearchPanel() {
       </div>
 
       {isValidSsic && totalPages > 0 ? (
-        <div className="flex w-full items-center justify-center gap-3">
+        <div className="flex w-full flex-col items-center justify-center gap-3 sm:flex-row">
           <button
             type="button"
             onClick={() => void setPage(Math.max(1, page - 1))}

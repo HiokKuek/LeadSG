@@ -270,9 +270,9 @@ export function AdminEnrichmentDashboard() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-6"
+        className="mb-8 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 sm:p-6"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-blue-900 mb-1">Available Quota</p>
             <p className="text-3xl font-bold text-blue-600">
@@ -280,15 +280,15 @@ export function AdminEnrichmentDashboard() {
             </p>
             <p className="text-xs text-blue-700 mt-1">Google API detail calls available</p>
           </div>
-          <div className="bg-white rounded-lg p-4">
+          <div className="bg-white rounded-lg p-4 w-full sm:w-auto">
             <p className="text-xs text-zinc-600 mb-2">Adjust quota</p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 type="number"
                 value={quotaDelta}
                 onChange={(e) => setQuotaDelta(e.target.value)}
                 placeholder="+100 or -50"
-                className="w-24 rounded-lg border border-blue-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full sm:w-24 rounded-lg border border-blue-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={adjustQuota}
@@ -326,7 +326,7 @@ export function AdminEnrichmentDashboard() {
           </motion.div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-            <table className="w-full">
+            <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50">
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">SSIC Codes</th>
@@ -350,17 +350,17 @@ export function AdminEnrichmentDashboard() {
                         : "hover:bg-zinc-50"
                     }`}
                   >
-                    <td className="px-6 py-4 text-sm text-zinc-600 font-mono">{request.ssicCodes.join(", ")}</td>
-                    <td className="px-6 py-4 text-sm text-zinc-600">
+                    <td className="px-4 sm:px-6 py-4 text-sm text-zinc-600 font-mono">{request.ssicCodes.join(", ")}</td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-zinc-600">
                       {request.candidateCount.toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
+                    <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-zinc-900">
                       USD {request.estimatedPriceUsd.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
+                    <td className="px-4 sm:px-6 py-4 text-sm font-semibold text-zinc-900">
                       USD {request.estimatedProviderCostUsd.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold">
+                    <td className="px-4 sm:px-6 py-4 text-sm font-semibold">
                       <span
                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
                           request.status === "requested"
@@ -405,7 +405,7 @@ export function AdminEnrichmentDashboard() {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
             >
-              <div className="sticky top-0 bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between">
+              <div className="sticky top-0 bg-white border-b border-zinc-200 px-4 sm:px-6 py-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-zinc-900">Request Details</h3>
                 <button
                   onClick={() => setSelectedRequest(null)}
@@ -415,7 +415,7 @@ export function AdminEnrichmentDashboard() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 {/* User Info */}
                 <div>
                   <p className="text-xs font-semibold text-zinc-600 uppercase mb-1">User Email</p>
@@ -431,7 +431,7 @@ export function AdminEnrichmentDashboard() {
                 </div>
 
                 {/* Highlights */}
-                <div className="grid grid-cols-2 gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div>
                     <p className="text-xs text-blue-900 font-semibold mb-1">API Calls</p>
                     <p className="text-xl font-bold text-blue-600">
@@ -525,7 +525,7 @@ export function AdminEnrichmentDashboard() {
 
                 {/* Admin Actions */}
                 <div className="flex flex-col gap-3 pt-4 border-t border-zinc-200">
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <button
                       onClick={() => setSelectedRequest(null)}
                       className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
@@ -596,7 +596,7 @@ export function AdminEnrichmentDashboard() {
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
             >
-              <div className="sticky top-0 bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between">
+              <div className="sticky top-0 bg-white border-b border-zinc-200 px-4 sm:px-6 py-4 flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-zinc-900">Job Results</h3>
                 <button
                   onClick={() => setSelectedJob(null)}
@@ -606,7 +606,7 @@ export function AdminEnrichmentDashboard() {
                 </button>
               </div>
 
-              <div className="p-6 space-y-4">
+              <div className="p-4 sm:p-6 space-y-4">
                 {/* Job Status */}
                 <div>
                   <p className="text-xs font-semibold text-zinc-600 uppercase mb-1">Status</p>
@@ -628,7 +628,7 @@ export function AdminEnrichmentDashboard() {
                 </div>
 
                 {/* Metrics */}
-                <div className="grid grid-cols-2 gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div>
                     <p className="text-xs text-blue-900 font-semibold mb-1">Candidates Processed</p>
                     <p className="text-xl font-bold text-blue-600">{(selectedJob.processedRows ?? 0).toLocaleString()}</p>
@@ -665,7 +665,7 @@ export function AdminEnrichmentDashboard() {
                 )}
 
                 {/* Timestamps */}
-                <div className="grid grid-cols-2 gap-3 text-xs text-zinc-600">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-zinc-600">
                   {selectedJob.createdAt && (
                     <div>
                       <p className="font-semibold">Created</p>
@@ -687,7 +687,7 @@ export function AdminEnrichmentDashboard() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3 pt-4 border-t border-zinc-200">
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-zinc-200">
                   <button
                     onClick={() => setSelectedJob(null)}
                     className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"

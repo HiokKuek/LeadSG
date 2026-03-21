@@ -274,7 +274,7 @@ export function UserEnrichmentPanel() {
     <section className="w-full">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-zinc-900">Get Company Details</h2>
+        <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl">Get Company Details</h2>
         <p className="mt-1 text-sm text-zinc-600">
           Retrieve phone numbers and websites for Singapore companies by SSIC code.
           <span className="block mt-1 text-xs text-zinc-500 italic">
@@ -286,7 +286,7 @@ export function UserEnrichmentPanel() {
       {/* SSIC Input Section */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-zinc-700 mb-2">SSIC Codes</label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             value={ssicInput}
             onChange={(e) => setSsicInput(e.target.value)}
@@ -296,7 +296,7 @@ export function UserEnrichmentPanel() {
           <button
             onClick={estimateCost}
             disabled={isLoading || !ssicInput.trim()}
-            className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed px-6 py-2.5 text-sm font-medium text-white transition-colors"
+            className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed px-6 py-2.5 text-sm font-medium text-white transition-colors sm:w-auto"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Estimate Cost"}
           </button>
@@ -328,7 +328,7 @@ export function UserEnrichmentPanel() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4"
+              className="bg-white rounded-xl shadow-xl p-4 sm:p-6 max-w-md w-full mx-4"
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-zinc-900">Cost Estimate</h3>
@@ -355,7 +355,7 @@ export function UserEnrichmentPanel() {
                 </div>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => setShowCostModal(false)}
                   className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
@@ -404,7 +404,7 @@ export function UserEnrichmentPanel() {
               animate={{ opacity: 1 }}
               className="mt-3 p-3 bg-zinc-50 rounded-lg text-xs"
             >
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div>
                   <p className="text-zinc-600">Status</p>
                   <p className="font-semibold text-zinc-900 capitalize">{selectedRequest.status}</p>
@@ -449,7 +449,7 @@ export function UserEnrichmentPanel() {
             </button>
           ) : (
             <div className="space-y-3">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   value={paymentCode}
                   onChange={(e) => setPaymentCode(e.target.value)}
@@ -651,7 +651,7 @@ export function UserEnrichmentPanel() {
                         </div>
 
                         {/* Key Metrics - Simple 2x2 Grid */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="p-4 bg-zinc-50 rounded-lg border border-zinc-200">
                             <p className="text-xs font-semibold text-zinc-600 uppercase mb-1">Total Rows</p>
                             <p className="text-2xl font-bold text-zinc-900">
@@ -687,7 +687,7 @@ export function UserEnrichmentPanel() {
 
                       {/* Actions */}
                       {job.status === "completed" && job.downloadPath && (
-                        <div className="flex gap-3 pt-4 border-t border-zinc-200">
+                        <div className="flex flex-col gap-3 pt-4 border-t border-zinc-200 sm:flex-row">
                           <button
                             onClick={() => {
                               setShowJobDetails(false);
@@ -710,7 +710,7 @@ export function UserEnrichmentPanel() {
                       )}
 
                       {job.status !== "completed" && (
-                        <div className="flex gap-3 pt-4 border-t border-zinc-200">
+                        <div className="flex flex-col gap-3 pt-4 border-t border-zinc-200 sm:flex-row">
                           <button
                             onClick={() => {
                               setShowJobDetails(false);

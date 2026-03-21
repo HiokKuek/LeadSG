@@ -15,9 +15,9 @@ export function EnrichmentControls() {
 
   return (
     <section className="mt-10 w-full">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Company Enrichment</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 sm:text-3xl">Company Enrichment</h1>
           <p className="mt-1 text-zinc-600">Get phone numbers and websites for Singapore companies</p>
         </div>
         {isAdmin && (
@@ -42,7 +42,7 @@ export function EnrichmentControls() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="rounded-xl border border-zinc-200 bg-white p-6"
+            className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6"
           >
             <AdminEnrichmentDashboard />
           </motion.div>
@@ -53,7 +53,7 @@ export function EnrichmentControls() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="rounded-xl border border-zinc-200 bg-white p-6"
+            className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6"
           >
             <UserEnrichmentPanel />
           </motion.div>
