@@ -98,6 +98,7 @@ export type EnrichmentJobResponse = {
   websitesFoundPercentage: number;
   runtimeSeconds: number | null;
   downloadPath: string | null;
+  userChargeUsd: number;
   estimatedMaxCostUsd: number;
   stopReason: string | null;
   errorMessage: string | null;

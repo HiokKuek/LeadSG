@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, desc, gte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
@@ -25,6 +25,8 @@ function toResponse(row: {
   cacheHitCount: number;
   phonesFoundCount: number;
   websitesFoundCount: number;
+  userChargeUsd: number;
+  preflightEstimatedPriceUsd?: number | null;
   estimatedMaxCostUsd: number;
   stopReason: string | null;
   errorMessage: string | null;
@@ -32,6 +34,8 @@ function toResponse(row: {
   startedAt: Date | null;
   finishedAt: Date | null;
 }): EnrichmentJobResponse {
+  const normalizedUserChargeUsdCents = row.preflightEstimatedPriceUsd ?? row.userChargeUsd;
+
   return {
     jobId: row.id,
     status: row.status as EnrichmentJobResponse["status"],
@@ -55,6 +59,7 @@ function toResponse(row: {
       ? Math.max(0, Math.floor((row.finishedAt.getTime() - row.startedAt.getTime()) / 1000))
       : null,
     downloadPath: `/api/enrichment/jobs/${row.id}/download`,
+    userChargeUsd: normalizedUserChargeUsdCents / 100,
     estimatedMaxCostUsd: row.estimatedMaxCostUsd / 100,
     stopReason: row.stopReason,
     errorMessage: row.errorMessage,
@@ -62,6 +67,45 @@ function toResponse(row: {
     startedAt: row.startedAt ? row.startedAt.toISOString() : null,
     finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
   };
+}
+
+export async function GET() {
+  const user = await getAuthenticatedUser();
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const db = getDb();
+  const jobs = await db
+    .select({
+      id: enrichmentJobs.id,
+      status: enrichmentJobs.status,
+      ssicList: enrichmentJobs.ssicList,
+      estimatedCandidateCount: enrichmentJobs.estimatedCandidateCount,
+      estimatedCacheHitCount: enrichmentJobs.estimatedCacheHitCount,
+      estimatedPaidCalls: enrichmentJobs.estimatedPaidCalls,
+      reservedPaidCalls: enrichmentJobs.reservedPaidCalls,
+      consumedPaidCalls: enrichmentJobs.consumedPaidCalls,
+      processedRows: enrichmentJobs.processedRows,
+      cacheHitCount: enrichmentJobs.cacheHitCount,
+      phonesFoundCount: enrichmentJobs.phonesFoundCount,
+      websitesFoundCount: enrichmentJobs.websitesFoundCount,
+      userChargeUsd: enrichmentJobs.userChargeUsd,
+      preflightEstimatedPriceUsd: enrichmentPreflightRequests.estimatedPriceUsd,
+      estimatedMaxCostUsd: enrichmentJobs.estimatedMaxCostUsd,
+      stopReason: enrichmentJobs.stopReason,
+      errorMessage: enrichmentJobs.errorMessage,
+      createdAt: enrichmentJobs.createdAt,
+      startedAt: enrichmentJobs.startedAt,
+      finishedAt: enrichmentJobs.finishedAt,
+    })
+    .from(enrichmentJobs)
+    .leftJoin(enrichmentPreflightRequests, eq(enrichmentPreflightRequests.id, enrichmentJobs.preflightRequestId))
+    .where(eq(enrichmentJobs.userId, user.id))
+    .orderBy(desc(enrichmentJobs.finishedAt))
+    .limit(50);
+
+  return NextResponse.json({ jobs: jobs.map(toResponse) });
 }
 
 export async function POST(request: NextRequest) {
@@ -188,6 +232,7 @@ export async function POST(request: NextRequest) {
         estimatedPaidCalls: preflight.projectedPaidCalls,
         reservedPaidCalls,
         consumedPaidCalls: 0,
+        userChargeUsd: preflight.estimatedPriceUsd,
         estimatedMaxCostUsd: estimatedMaxCostUsdCents,
       })
       .returning({
@@ -203,6 +248,7 @@ export async function POST(request: NextRequest) {
         cacheHitCount: enrichmentJobs.cacheHitCount,
         phonesFoundCount: enrichmentJobs.phonesFoundCount,
         websitesFoundCount: enrichmentJobs.websitesFoundCount,
+        userChargeUsd: enrichmentJobs.userChargeUsd,
         estimatedMaxCostUsd: enrichmentJobs.estimatedMaxCostUsd,
         stopReason: enrichmentJobs.stopReason,
         errorMessage: enrichmentJobs.errorMessage,

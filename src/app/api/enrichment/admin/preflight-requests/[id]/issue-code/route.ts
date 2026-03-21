@@ -49,13 +49,6 @@ export async function POST(
     );
   }
 
-  if (preflightRequest.projectedPaidCalls <= 0) {
-    return NextResponse.json(
-      { error: "This preflight request does not require paid calls or payment code." },
-      { status: 400 },
-    );
-  }
-
   if (preflightRequest.paymentCodeId) {
     const existingCodeRows = await db
       .select({

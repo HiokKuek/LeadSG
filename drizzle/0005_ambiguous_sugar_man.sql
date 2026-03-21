@@ -1,0 +1,1 @@
+ALTER TABLE "enrichment_jobs" ADD COLUMN "user_charge_usd_cents" integer DEFAULT 0 NOT NULL;

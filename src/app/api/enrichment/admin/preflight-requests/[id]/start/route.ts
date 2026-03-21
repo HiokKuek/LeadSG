@@ -22,6 +22,7 @@ function toResponse(row: {
   cacheHitCount: number;
   phonesFoundCount: number;
   websitesFoundCount: number;
+  userChargeUsd: number;
   estimatedMaxCostUsd: number;
   stopReason: string | null;
   errorMessage: string | null;
@@ -52,6 +53,7 @@ function toResponse(row: {
       ? Math.max(0, Math.floor((row.finishedAt.getTime() - row.startedAt.getTime()) / 1000))
       : null,
     downloadPath: `/api/enrichment/jobs/${row.id}/download`,
+    userChargeUsd: row.userChargeUsd / 100,
     estimatedMaxCostUsd: row.estimatedMaxCostUsd / 100,
     stopReason: row.stopReason,
     errorMessage: row.errorMessage,
@@ -114,6 +116,7 @@ export async function POST(
     cacheHitCount: number;
     phonesFoundCount: number;
     websitesFoundCount: number;
+    userChargeUsd: number;
     estimatedMaxCostUsd: number;
     stopReason: string | null;
     errorMessage: string | null;
@@ -163,6 +166,7 @@ export async function POST(
           estimatedPaidCalls: preflight.projectedPaidCalls,
           reservedPaidCalls: preflight.projectedPaidCalls,
           consumedPaidCalls: 0,
+          userChargeUsd: preflight.estimatedPriceUsd,
           estimatedMaxCostUsd: Math.round(estimateMaxCostUsd(preflight.projectedPaidCalls) * 100),
         })
         .returning({
@@ -178,6 +182,7 @@ export async function POST(
           cacheHitCount: enrichmentJobs.cacheHitCount,
           phonesFoundCount: enrichmentJobs.phonesFoundCount,
           websitesFoundCount: enrichmentJobs.websitesFoundCount,
+          userChargeUsd: enrichmentJobs.userChargeUsd,
           estimatedMaxCostUsd: enrichmentJobs.estimatedMaxCostUsd,
           stopReason: enrichmentJobs.stopReason,
           errorMessage: enrichmentJobs.errorMessage,

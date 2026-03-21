@@ -128,6 +128,7 @@ export const enrichmentJobs = pgTable("enrichment_jobs", {
   cacheHitCount: integer("cache_hit_count").notNull().default(0),
   phonesFoundCount: integer("phones_found_count").notNull().default(0),
   websitesFoundCount: integer("websites_found_count").notNull().default(0),
+  userChargeUsd: integer("user_charge_usd_cents").notNull().default(0),
   estimatedMaxCostUsd: integer("estimated_max_cost_usd_cents").notNull().default(0),
   stopReason: varchar("stop_reason", { length: 64 }),
   errorMessage: text("error_message"),

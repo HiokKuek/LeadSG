@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Loader2, X } from "lucide-react";
+import { ChevronDown, Download, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type PreflightResponse = {
@@ -25,10 +25,28 @@ type PreflightRequest = {
 
 type JobResponse = {
   jobId: string;
-  status: string;
+  status: "queued" | "running" | "completed" | "failed" | "partial_stopped_budget";
+  ssicCodes: string[];
+  estimatedCandidateCount: number;
+  estimatedCacheHitCount: number;
   estimatedPaidCalls: number;
   reservedPaidCalls: number;
   consumedPaidCalls: number;
+  processedRows: number;
+  cacheHitCount: number;
+  phonesFoundCount: number;
+  websitesFoundCount: number;
+  phonesFoundPercentage: number;
+  websitesFoundPercentage: number;
+  runtimeSeconds: number | null;
+  downloadPath: string | null;
+  userChargeUsd: number;
+  estimatedMaxCostUsd: number;
+  stopReason: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
 };
 
 export function UserEnrichmentPanel() {
@@ -40,10 +58,15 @@ export function UserEnrichmentPanel() {
   const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
   const [requests, setRequests] = useState<PreflightRequest[]>([]);
   const [jobResult, setJobResult] = useState<JobResponse | null>(null);
+  const [jobDetails, setJobDetails] = useState<JobResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
   const [showJobQueued, setShowJobQueued] = useState(false);
+  const [showJobDetails, setShowJobDetails] = useState(false);
+  const [userDidCloseResults, setUserDidCloseResults] = useState(false);
+  const [jobHistory, setJobHistory] = useState<JobResponse[]>([]);
+  const [selectedHistoryJob, setSelectedHistoryJob] = useState<JobResponse | null>(null);
 
   const parseSsicCodes = () =>
     Array.from(
@@ -74,6 +97,54 @@ export function UserEnrichmentPanel() {
       setSelectedRequestId(requests[0].requestId);
     }
   }, [selectedRequestId]);
+
+  // Load user's job history
+  const loadJobHistory = useCallback(async () => {
+    try {
+      const response = await fetch("/api/enrichment/jobs");
+      const data = (await response.json()) as { jobs?: JobResponse[]; error?: string };
+      if (response.ok && !data.error && data.jobs) {
+        setJobHistory(data.jobs.sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime()));
+      }
+    } catch {
+      // Silently fail
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadJobHistory();
+  }, [loadJobHistory]);
+
+  // Poll job details while running
+  useEffect(() => {
+    if (!jobResult?.jobId) return;
+
+    const pollJob = async () => {
+      try {
+        const response = await fetch(`/api/enrichment/jobs/${jobResult.jobId}`);
+        const data = (await response.json()) as JobResponse | { error?: string };
+        if (!response.ok || ("error" in data && data.error)) {
+          return;
+        }
+        const parsedJob = data as JobResponse;
+        setJobDetails(parsedJob);
+
+        // Stop polling if job is complete, only auto-open if user hasn't closed it
+        if (!["queued", "running"].includes(parsedJob.status)) {
+          setShowJobQueued(false);
+          if (!userDidCloseResults) {
+            setShowJobDetails(true);
+          }
+        }
+      } catch {
+        // Silently fail on poll errors
+      }
+    };
+
+    pollJob();
+    const interval = window.setInterval(pollJob, 2000);
+    return () => window.clearInterval(interval);
+  }, [jobResult?.jobId, userDidCloseResults]);
 
   useEffect(() => {
     void refreshUserRequests().catch((err) => setError((err as Error).message));
@@ -197,9 +268,7 @@ export function UserEnrichmentPanel() {
   };
 
   const canStartJob = selectedRequest && selectedRequest.status === "ready_to_start";
-  const needsCode = selectedRequest && 
-    selectedRequest.status === "code_issued" && 
-    selectedRequest.projectedPaidCalls > 0;
+  const needsCode = selectedRequest && selectedRequest.status === "code_issued";
 
   return (
     <section className="w-full">
@@ -424,6 +493,45 @@ export function UserEnrichmentPanel() {
         </motion.div>
       )}
 
+      {/* Past Results Section */}
+      {jobHistory.filter((j) => ["completed", "partial_stopped_budget"].includes(j.status)).length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <label className="block text-sm font-medium text-zinc-700 mb-3">Past Results</label>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {jobHistory
+              .filter((j) => ["completed", "partial_stopped_budget"].includes(j.status))
+              .map((job) => (
+                <button
+                  key={job.jobId}
+                  onClick={() => {
+                    setSelectedHistoryJob(job);
+                    setShowJobDetails(true);
+                    setUserDidCloseResults(false);
+                  }}
+                  className="w-full text-left p-3 rounded-lg border border-zinc-200 hover:bg-zinc-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-zinc-900 font-mono">
+                      {job.ssicCodes.join(", ")}
+                    </span>
+                    <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800">
+                      {job.runtimeSeconds}s
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-600 mt-1">
+                    {job.phonesFoundCount} phones • {job.websitesFoundCount} websites
+                  </div>
+                </button>
+              ))}
+          </div>
+        </motion.div>
+      )}
+
+
       {/* Job Queued Message */}
       <AnimatePresence>
         {showJobQueued && jobResult && (
@@ -434,11 +542,15 @@ export function UserEnrichmentPanel() {
             className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200"
           >
             <div className="flex items-start gap-3">
-              <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <Loader2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5 animate-spin" />
               <div className="flex-1">
-                <h4 className="font-semibold text-green-900 mb-1">Job Queued</h4>
+                <h4 className="font-semibold text-green-900 mb-1">
+                  {jobDetails?.status === "running" ? "Processing Job..." : "Job Queued"}
+                </h4>
                 <p className="text-sm text-green-800 mb-2">
-                  Your enrichment job has been submitted and is being processed.
+                  {jobDetails?.status === "running"
+                    ? `Processed ${jobDetails.processedRows.toLocaleString()} / ${jobDetails.estimatedCandidateCount.toLocaleString()} companies...`
+                    : "Your enrichment job has been submitted and is being processed."}
                 </p>
                 <p className="text-xs text-green-700 font-mono bg-white rounded px-2 py-1 inline-block">
                   {jobResult.jobId.slice(0, 8)}...
@@ -451,6 +563,162 @@ export function UserEnrichmentPanel() {
                 <X className="w-4 h-4" />
               </button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Job Details Modal */}
+      <AnimatePresence>
+        {showJobDetails && (jobDetails || selectedHistoryJob) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowJobDetails(false);
+              setUserDidCloseResults(true);
+              setSelectedHistoryJob(null);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              {(() => {
+                const job = selectedHistoryJob || jobDetails;
+                if (!job) return null;
+
+                return (
+                  <>
+                    <div className="sticky top-0 bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-zinc-900">
+                        {job.status === "completed" ? "✓ Results" : `Job ${job.status}`}
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowJobDetails(false);
+                          setUserDidCloseResults(true);
+                          setSelectedHistoryJob(null);
+                        }}
+                        className="text-zinc-400 hover:text-zinc-600"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-6 space-y-6">
+                      {/* Status Banner */}
+                      <div
+                        className={`p-4 rounded-lg border ${
+                          job.status === "completed"
+                            ? "bg-green-50 border-green-200"
+                            : job.status === "failed"
+                              ? "bg-red-50 border-red-200"
+                              : "bg-blue-50 border-blue-200"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold capitalize">
+                          {job.status === "completed"
+                            ? "✓ Enrichment completed successfully"
+                            : job.status === "failed"
+                              ? "✗ Job failed"
+                              : `Processing: ${job.processedRows.toLocaleString()} / ${job.estimatedCandidateCount.toLocaleString()}`}
+                        </p>
+                        {job.errorMessage && (
+                          <p className="text-xs mt-1 text-red-700">{job.errorMessage}</p>
+                        )}
+                      </div>
+
+                      {/* User-Friendly Results Grid (simplified) */}
+                      <div className="space-y-4">
+                        {/* SSIC Codes */}
+                        <div className="p-4 rounded-lg bg-zinc-50 border border-zinc-200">
+                          <p className="text-xs font-semibold text-zinc-600 uppercase mb-2">SSIC Codes</p>
+                          <p className="text-sm font-mono font-semibold text-zinc-900">{job.ssicCodes.join(", ")}</p>
+                        </div>
+
+                        {/* Key Metrics - Simple 2x2 Grid */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-4 bg-zinc-50 rounded-lg border border-zinc-200">
+                            <p className="text-xs font-semibold text-zinc-600 uppercase mb-1">Total Rows</p>
+                            <p className="text-2xl font-bold text-zinc-900">
+                              {job.processedRows.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                            <p className="text-xs font-semibold text-green-600 uppercase mb-1">Phone Numbers</p>
+                            <p className="text-2xl font-bold text-green-700">
+                              {job.phonesFoundCount} ({job.phonesFoundPercentage}%)
+                            </p>
+                          </div>
+                          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <p className="text-xs font-semibold text-purple-600 uppercase mb-1">Websites</p>
+                            <p className="text-2xl font-bold text-purple-700">
+                              {job.websitesFoundCount} ({job.websitesFoundPercentage}%)
+                            </p>
+                          </div>
+                          <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                            <p className="text-xs font-semibold text-amber-600 uppercase mb-1">Runtime</p>
+                            <p className="text-2xl font-bold text-amber-700">
+                              {job.runtimeSeconds ?? 0}s
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Cost Summary */}
+                        <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                          <p className="text-xs font-semibold text-blue-600 uppercase mb-2">Your Cost</p>
+                          <p className="text-3xl font-bold text-blue-700">USD {job.userChargeUsd.toFixed(2)}</p>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {job.status === "completed" && job.downloadPath && (
+                        <div className="flex gap-3 pt-4 border-t border-zinc-200">
+                          <button
+                            onClick={() => {
+                              setShowJobDetails(false);
+                              setUserDidCloseResults(true);
+                              setSelectedHistoryJob(null);
+                            }}
+                            className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                          >
+                            Close
+                          </button>
+                          <a
+                            href={job.downloadPath}
+                            download={`${job.ssicCodes.join(",")}_leadsg.csv`}
+                            className="flex-1 rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2.5 text-sm font-medium text-white transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download CSV
+                          </a>
+                        </div>
+                      )}
+
+                      {job.status !== "completed" && (
+                        <div className="flex gap-3 pt-4 border-t border-zinc-200">
+                          <button
+                            onClick={() => {
+                              setShowJobDetails(false);
+                              setUserDidCloseResults(true);
+                              setSelectedHistoryJob(null);
+                            }}
+                            className="flex-1 rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

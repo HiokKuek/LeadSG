@@ -39,6 +39,7 @@ export async function GET(
       id: enrichmentJobs.id,
       userId: enrichmentJobs.userId,
       status: enrichmentJobs.status,
+      ssicList: enrichmentJobs.ssicList,
     })
     .from(enrichmentJobs)
     .where(eq(enrichmentJobs.id, id))
@@ -60,20 +61,18 @@ export async function GET(
     );
   }
 
+  // Generate filename: ssic1,ssic2,... _leadsg.csv
+  const ssicFilename = job.ssicList.join(",");
+  const filename = `${ssicFilename}_leadsg.csv`;
+
   const header = [
     "uen",
     "entity_name",
     "street_name",
-    "primary_ssic_code",
-    "place_id",
     "found_name",
-    "national_phone_number",
-    "international_phone_number",
-    "website_uri",
-    "formatted_address",
-    "enrichment_status",
-    "error_code",
-    "error_message",
+    "found_address",
+    "phone_number",
+    "website",
   ].join(",") + "\n";
 
   let offset = 0;
@@ -89,16 +88,11 @@ export async function GET(
             uen: enrichmentJobItems.uen,
             entityName: activeEntities.entityName,
             streetName: activeEntities.streetName,
-            primarySsicCode: enrichmentJobItems.primarySsicCode,
-            placeId: companyContactEnrichment.placeId,
             foundName: companyContactEnrichment.foundName,
+            formattedAddress: companyContactEnrichment.formattedAddress,
             nationalPhoneNumber: companyContactEnrichment.nationalPhoneNumber,
             internationalPhoneNumber: companyContactEnrichment.internationalPhoneNumber,
             websiteUri: companyContactEnrichment.websiteUri,
-            formattedAddress: companyContactEnrichment.formattedAddress,
-            enrichmentStatus: enrichmentJobItems.status,
-            errorCode: enrichmentJobItems.errorCode,
-            errorMessage: enrichmentJobItems.errorMessage,
           })
           .from(enrichmentJobItems)
           .leftJoin(activeEntities, eq(activeEntities.uen, enrichmentJobItems.uen))
@@ -112,21 +106,19 @@ export async function GET(
           break;
         }
 
-        const csvChunk = rows.map((row) => [
-          csvEscape(row.uen),
-          csvEscape(row.entityName),
-          csvEscape(row.streetName),
-          csvEscape(row.primarySsicCode),
-          csvEscape(row.placeId),
-          csvEscape(row.foundName),
-          csvEscape(row.nationalPhoneNumber),
-          csvEscape(row.internationalPhoneNumber),
-          csvEscape(row.websiteUri),
-          csvEscape(row.formattedAddress),
-          csvEscape(row.enrichmentStatus),
-          csvEscape(row.errorCode),
-          csvEscape(row.errorMessage),
-        ].join(",")).join("\n") + "\n";
+        const csvChunk = rows.map((row) => {
+          // Use national phone if available, otherwise international phone
+          const phoneNumber = row.nationalPhoneNumber || row.internationalPhoneNumber || "";
+          return [
+            csvEscape(row.uen),
+            csvEscape(row.entityName),
+            csvEscape(row.streetName),
+            csvEscape(row.foundName),
+            csvEscape(row.formattedAddress),
+            csvEscape(phoneNumber),
+            csvEscape(row.websiteUri),
+          ].join(",");
+        }).join("\n") + "\n";
 
         controller.enqueue(encoder.encode(csvChunk));
         offset += rows.length;
@@ -139,7 +131,7 @@ export async function GET(
   return new Response(stream, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="enrichment-job-${id}.csv"`,
+      "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "private, no-store",
     },
   });

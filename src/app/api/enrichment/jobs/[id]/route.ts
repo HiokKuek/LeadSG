@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
-import { enrichmentJobs } from "@/lib/schema";
+import { enrichmentJobs, enrichmentPreflightRequests } from "@/lib/schema";
 import type { EnrichmentJobResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -35,6 +35,8 @@ export async function GET(
       cacheHitCount: enrichmentJobs.cacheHitCount,
       phonesFoundCount: enrichmentJobs.phonesFoundCount,
       websitesFoundCount: enrichmentJobs.websitesFoundCount,
+      userChargeUsd: enrichmentJobs.userChargeUsd,
+      preflightEstimatedPriceUsd: enrichmentPreflightRequests.estimatedPriceUsd,
       estimatedMaxCostUsd: enrichmentJobs.estimatedMaxCostUsd,
       stopReason: enrichmentJobs.stopReason,
       errorMessage: enrichmentJobs.errorMessage,
@@ -43,6 +45,7 @@ export async function GET(
       finishedAt: enrichmentJobs.finishedAt,
     })
     .from(enrichmentJobs)
+    .leftJoin(enrichmentPreflightRequests, eq(enrichmentPreflightRequests.id, enrichmentJobs.preflightRequestId))
     .where(eq(enrichmentJobs.id, id))
     .limit(1);
 
@@ -78,6 +81,7 @@ export async function GET(
       ? Math.max(0, Math.floor((job.finishedAt.getTime() - job.startedAt.getTime()) / 1000))
       : null,
     downloadPath: `/api/enrichment/jobs/${job.id}/download`,
+    userChargeUsd: (job.preflightEstimatedPriceUsd ?? job.userChargeUsd) / 100,
     estimatedMaxCostUsd: job.estimatedMaxCostUsd / 100,
     stopReason: job.stopReason,
     errorMessage: job.errorMessage,

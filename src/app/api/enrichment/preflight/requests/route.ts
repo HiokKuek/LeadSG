@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       userEmail: user.email,
       ssicList: parsed.data.ssicCodes,
-      status: estimate.projectedPaidCalls === 0 ? "ready_to_start" : "requested",
+      status: "requested",
       candidateCount: estimate.candidateCount,
       projectedPaidCalls: estimate.projectedPaidCalls,
       estimatedPriceUsd: Math.round(estimateUserChargeUsd(estimate.candidateCount) * 100),
