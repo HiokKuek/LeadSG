@@ -20,7 +20,7 @@ export default async function Home() {
           LeadSG 📞
         </h1>
         <p className="mt-3 text-base text-zinc-600 sm:text-lg">
-          Search for live companies with SSIC code.
+          Search for live companies in Singapore. 
         </p>
       </header>
 

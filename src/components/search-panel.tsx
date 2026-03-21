@@ -1,5 +1,7 @@
 "use client";
 
+import { useAuth } from "@clerk/nextjs";
+import { Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseAsInteger, parseAsString, useQueryState } from "nuqs";
 
@@ -82,6 +84,7 @@ function writeSessionStorage<T>(key: string, value: T): void {
 }
 
 export function SearchPanel() {
+  const { isSignedIn } = useAuth();
   const [ssic, setSsic] = useQueryState("ssic", ssicParser);
   const [page, setPage] = useQueryState("page", pageParser);
   const [rows, setRows] = useState<EntitySearchResult[]>([]);
@@ -92,6 +95,8 @@ export function SearchPanel() {
   const [pageSize, setPageSize] = useState(10);
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
   const [isLoadingPage, setIsLoadingPage] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [showAuthHint, setShowAuthHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeSsicRef = useRef("");
   const rowCountRef = useRef(0);
@@ -301,6 +306,43 @@ export function SearchPanel() {
         ? error ?? "No companies found for this SSIC code."
         : "Enter a valid 5-digit SSIC code.";
 
+  const handleDownloadData = useCallback(async () => {
+    if (!isValidSsic || totalMatching === 0 || isDownloading) {
+      return;
+    }
+
+    if (!isSignedIn) {
+      setShowAuthHint(true);
+      window.setTimeout(() => setShowAuthHint(false), 2800);
+      return;
+    }
+
+    setIsDownloading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/search/download?ssic=${encodeURIComponent(normalizedSsic)}`);
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Unable to download CSV data.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${normalizedSsic}_companies.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      setError((downloadError as Error).message);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [isDownloading, isSignedIn, isValidSsic, normalizedSsic, totalMatching]);
+
   return (
     <section className="flex w-full flex-col items-center gap-8">
       <div className="w-full max-w-xl space-y-2">
@@ -337,6 +379,36 @@ export function SearchPanel() {
       </div>
 
       <div className="relative w-full rounded-xl border border-zinc-200 bg-white">
+        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+          <p className="text-sm font-medium text-zinc-700">Search Results</p>
+
+          {isValidSsic ? (
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => void handleDownloadData()}
+                className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isDownloading || totalMatching === 0}
+                aria-label="download_data"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+
+              {!isSignedIn ? (
+                <div
+                  className={`pointer-events-none absolute top-full right-0 z-20 mt-2 w-max max-w-[240px] rounded-md bg-zinc-900 px-3 py-1.5 text-xs text-white shadow-sm transition-all duration-200 ${
+                    showAuthHint
+                      ? "translate-y-0 opacity-100"
+                      : "-translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100"
+                  }`}
+                >
+                  Please sign in to use download_data.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow>

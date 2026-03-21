@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 type FaqItem = {
   question: string;
@@ -10,32 +10,6 @@ type FaqItem = {
 
 export function CompanyEnrichmentFaq() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
-  const [ssicLookupQuery, setSsicLookupQuery] = useState("");
-
-  const ssicReference = useMemo(
-    () => [
-      { code: "62011", title: "Development of software and applications (except games and cybersecurity)" },
-      { code: "62012", title: "Development of computer games" },
-      { code: "62013", title: "Development of software for cybersecurity" },
-      { code: "62021", title: "Information technology consultancy (except cybersecurity)" },
-      { code: "62022", title: "Information technology cybersecurity consultancy" },
-      { code: "62023", title: "Computer facilities management activities" },
-      { code: "63110", title: "Data analytics, processing and related activities" },
-      { code: "70201", title: "Management consultancy services" },
-      { code: "74191", title: "Interior design services" },
-      { code: "46900", title: "Wholesale trade of a variety of goods without a dominant product" },
-    ],
-    [],
-  );
-
-  const filteredSsicReference = useMemo(() => {
-    const query = ssicLookupQuery.trim().toLowerCase();
-    if (!query) return ssicReference;
-
-    return ssicReference.filter((item) =>
-      item.code.includes(query) || item.title.toLowerCase().includes(query),
-    );
-  }, [ssicLookupQuery, ssicReference]);
 
   const faqs: FaqItem[] = [
     {
@@ -93,25 +67,18 @@ export function CompanyEnrichmentFaq() {
                   <p>{item.answer}</p>
 
                   {item.question === "What is SSIC?" && (
-                    <div className="mt-3">
-                      <label className="mb-2 block text-xs font-medium text-zinc-700">Quick SSIC lookup</label>
-                      <input
-                        value={ssicLookupQuery}
-                        onChange={(event) => setSsicLookupQuery(event.target.value)}
-                        placeholder="Search by code or keyword (e.g. 62011 or software)"
-                        className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50 p-2">
-                        {filteredSsicReference.length === 0 ? (
-                          <p className="text-xs text-zinc-500">No matching SSIC found in quick reference list.</p>
-                        ) : (
-                          filteredSsicReference.map((entry) => (
-                            <p key={entry.code} className="py-1 text-xs text-zinc-700">
-                              <span className="font-semibold text-zinc-900">{entry.code}</span> — {entry.title}
-                            </p>
-                          ))
-                        )}
-                      </div>
+                    <div className="mt-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                      For the comprehensive SSIC mapping, view
+                      {" "}
+                      <a
+                        href="/ssic.pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-blue-700 underline underline-offset-2"
+                      >
+                        ssic.pdf
+                      </a>
+                      .
                     </div>
                   )}
                 </div>
