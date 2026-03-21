@@ -414,6 +414,15 @@ export function UserEnrichmentPanel() {
                   <p className="font-semibold text-zinc-900">USD {selectedRequest.estimatedPriceUsd.toFixed(2)}</p>
                 </div>
               </div>
+
+              {selectedRequest.status === "requested" && (
+                <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-900">
+                  <p className="text-xs font-semibold uppercase tracking-wide">Request Received</p>
+                  <p className="mt-1 text-sm">
+                    Our team has received your request and will contact you shortly to arrange payment.
+                  </p>
+                </div>
+              )}
             </motion.div>
           )}
         </motion.div>

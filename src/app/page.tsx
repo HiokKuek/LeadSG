@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 
 import { AuthControls } from "@/components/auth-controls";
+import { CompanyEnrichmentFaq } from "@/components/company-enrichment-faq";
 import { EnrichmentControls } from "@/components/enrichment-controls";
 import { SearchPanelFallback } from "@/components/search-panel-fallback";
 import { SearchPanel } from "@/components/search-panel";
@@ -42,6 +43,8 @@ export default async function Home() {
       )}
 
       {userId ? <EnrichmentControls /> : null}
+
+      <CompanyEnrichmentFaq />
 
       <footer className="mt-auto pt-8 w-full text-center text-sm text-zinc-500">
         Built by HiokKuek {new Date().getFullYear()} <span className="inline-block animate-pulse-heart">💛</span>

@@ -617,5 +617,36 @@ NODE_OPTIONS=--inspect npm run worker:dev  # Debug with DevTools
 
 ---
 
-**Last Updated**: 21 March 2026 (Worker Deployment Phase Complete)  
-**Context**: Enrichment worker deployed on NAS with comprehensive Docker setup, structured JSON logging, cache-first processing, budget management, and atomic job queue pattern. README.md updated with complete deployment instructions.
+## Phase 5: Enrichment Stabilization Fixes (March 2026)
+
+### Pricing & Unit Correctness (Completed)
+- Fixed `userChargeUsd` unit mismatch in job creation flows:
+   - `POST /api/enrichment/jobs`
+   - `POST /api/enrichment/admin/preflight-requests/:id/start`
+- `enrichment_preflight_requests.estimatedPriceUsd` is already stored in **cents**; job rows now persist user charge in cents without double conversion.
+- Read APIs now normalize displayed user charge using preflight's canonical estimate to ensure legacy over-stored rows still render correctly:
+   - `GET /api/enrichment/jobs`
+   - `GET /api/enrichment/jobs/:id`
+   - `GET /api/enrichment/admin/jobs/:requestId`
+
+### Admin Results Visibility (Completed)
+- Added dedicated admin job lookup endpoint:
+   - `GET /api/enrichment/admin/jobs/:requestId`
+- Admin dashboard now fetches job results by preflight request ID, enabling admins to view/download results for non-owner users.
+
+### Runtime/UI Stability (Completed)
+- Fixed admin job modal crash caused by response-shape mismatch (`jobId`/`processedRows` vs prior UI field names).
+- Added defensive guards for polling/history response parsing in `UserEnrichmentPanel` to avoid rendering error payloads as job objects.
+- Fixed React duplicate key warning in admin modal flow by:
+   - assigning explicit modal keys under `AnimatePresence`
+   - ensuring request modal closes before opening results modal
+   - adding safe fallback table row key when request ID is missing/empty
+
+### Validation
+- `npm run lint` passes.
+- `npm run build` passes.
+
+---
+
+**Last Updated**: 21 March 2026 (Phase 5 Stabilization Updates Applied)  
+**Context**: Enrichment pricing units, admin results access, and modal/rendering stability issues were fixed and validated (lint + build passing).
