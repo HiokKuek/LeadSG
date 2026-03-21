@@ -3,7 +3,7 @@ name: ACRA Data Mirror ETL
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 3 * * 1"
+    - cron: "0 3 * * *"
 
 jobs:
   mirror:
