@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
-import { buildPreflightEstimate, ssicListSchema } from "@/lib/enrichment";
+import {
+  buildPreflightEstimate,
+  estimateUserChargeUsd,
+  ssicListSchema,
+} from "@/lib/enrichment";
 import type { EnrichmentPreflightResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -30,7 +34,8 @@ export async function POST(request: NextRequest) {
     ssicCodes: parsed.data.ssicCodes,
     candidateCount: estimate.candidateCount,
     projectedPaidCalls: estimate.projectedPaidCalls,
-    estimatedPriceUsd: estimate.projectedMaxCostUsd,
+    estimatedPriceUsd: estimateUserChargeUsd(estimate.candidateCount),
+    estimatedProviderCostUsd: estimate.projectedMaxCostUsd,
   };
 
   return NextResponse.json(response);

@@ -8,10 +8,11 @@ type PreflightRequest = {
   requestId: string;
   userEmail: string;
   ssicCodes: string[];
-  status: "requested" | "code_issued" | "ready_to_start" | "started";
+  status: "requested" | "code_issued" | "ready_to_start" | "started" | "completed" | "failed" | "partial_stopped_budget";
   candidateCount: number;
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
+  estimatedProviderCostUsd: number;
   issuedCode: string | null;
   requestedAt: string;
 };
@@ -30,18 +31,8 @@ function getCachedQueriesCount(request: PreflightRequest): number {
   return Math.max(request.candidateCount - request.projectedPaidCalls, 0);
 }
 
-function getExpectedCostUsd(request: PreflightRequest): number {
-  if (request.candidateCount === 0) {
-    return 0;
-  }
-
-  if (request.projectedPaidCalls === 0) {
-    return 0;
-  }
-
-  const userCostWithoutCache = (request.estimatedPriceUsd / request.projectedPaidCalls) * request.candidateCount;
-  const savingsFromCache = (request.estimatedPriceUsd / request.projectedPaidCalls) * getCachedQueriesCount(request);
-  return Math.max(userCostWithoutCache - savingsFromCache, 0);
+function isPendingRequest(status: PreflightRequest["status"]): boolean {
+  return status === "requested" || status === "code_issued" || status === "ready_to_start";
 }
 
 export function AdminEnrichmentDashboard() {
@@ -88,6 +79,14 @@ export function AdminEnrichmentDashboard() {
   useEffect(() => {
     void Promise.all([refreshQueue(), refreshQuota()]);
   }, [refreshQueue, refreshQuota]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void refreshQueue();
+    }, 10000);
+
+    return () => window.clearInterval(intervalId);
+  }, [refreshQueue]);
 
   const adjustQuota = async () => {
     setIsLoading(true);
@@ -172,6 +171,31 @@ export function AdminEnrichmentDashboard() {
     }
   };
 
+  const deletePendingRequest = async (requestId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/enrichment/admin/preflight-requests/${requestId}`,
+        { method: "DELETE" }
+      );
+
+      const data = (await response.json()) as { deleted?: boolean; error?: string };
+      if (!response.ok || data.error || !data.deleted) {
+        throw new Error(data.error ?? "Failed to delete pending request");
+      }
+
+      setSelectedRequest(null);
+      setIssuedCodes((prev) => prev.filter((item) => item.requestId !== requestId));
+      await Promise.all([refreshQueue(), refreshQuota()]);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const issuedCode = useMemo(
     () => issuedCodes.find((ic) => ic.requestId === selectedRequest?.requestId),
     [issuedCodes, selectedRequest]
@@ -227,7 +251,7 @@ export function AdminEnrichmentDashboard() {
 
       {/* Preflight Queue Table */}
       <div>
-        <h3 className="text-lg font-semibold text-zinc-900 mb-4">Pending Requests</h3>
+        <h3 className="text-lg font-semibold text-zinc-900 mb-4">Requests</h3>
 
         {adminRequests.length === 0 ? (
           <motion.div
@@ -235,7 +259,7 @@ export function AdminEnrichmentDashboard() {
             animate={{ opacity: 1 }}
             className="rounded-lg bg-zinc-50 border border-zinc-200 p-8 text-center"
           >
-            <p className="text-zinc-600">No pending requests</p>
+            <p className="text-zinc-600">No requests</p>
           </motion.div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
@@ -244,9 +268,11 @@ export function AdminEnrichmentDashboard() {
                 <tr className="border-b border-zinc-200 bg-zinc-50">
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">User</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">SSIC Codes</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Rows Requested</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">API Calls Required</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Cached Queries</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Expected Cost</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Provider Cost</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">User Cost</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-900">Action</th>
                 </tr>
@@ -268,21 +294,35 @@ export function AdminEnrichmentDashboard() {
                     <td className="px-6 py-4 text-sm text-zinc-900 font-medium">{request.userEmail}</td>
                     <td className="px-6 py-4 text-sm text-zinc-600 font-mono">{request.ssicCodes.join(", ")}</td>
                     <td className="px-6 py-4 text-sm text-zinc-600">
+                      {request.candidateCount.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-600">
                       {request.projectedPaidCalls.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-600">
                       {getCachedQueriesCount(request).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
-                      USD {getExpectedCostUsd(request).toFixed(2)}
+                      USD {request.estimatedProviderCostUsd.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
+                      USD {request.estimatedPriceUsd.toFixed(2)}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                        request.status === "started"
-                          ? "bg-green-100 text-green-800"
+                        request.status === "requested"
+                          ? "bg-blue-100 text-blue-800"
                           : request.status === "code_issued"
                           ? "bg-amber-100 text-amber-800"
-                          : "bg-blue-100 text-blue-800"
+                          : request.status === "ready_to_start"
+                            ? "bg-green-100 text-green-800"
+                            : request.status === "started"
+                              ? "bg-zinc-100 text-zinc-700"
+                              : request.status === "completed"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : request.status === "partial_stopped_budget"
+                                  ? "bg-orange-100 text-orange-800"
+                                  : "bg-red-100 text-red-800"
                       }`}>
                         {request.status}
                       </span>
@@ -363,14 +403,18 @@ export function AdminEnrichmentDashboard() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-blue-900 font-semibold mb-1">Expected Cost</p>
-                    <p className="text-xl font-bold text-blue-600">USD {getExpectedCostUsd(selectedRequest).toFixed(2)}</p>
+                    <p className="text-xs text-blue-900 font-semibold mb-1">Provider Cost</p>
+                    <p className="text-xl font-bold text-blue-600">USD {selectedRequest.estimatedProviderCostUsd.toFixed(2)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-blue-900 font-semibold mb-1">Companies</p>
+                    <p className="text-xs text-blue-900 font-semibold mb-1">Rows Requested</p>
                     <p className="text-xl font-bold text-blue-600">
                       {selectedRequest.candidateCount.toLocaleString()}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-900 font-semibold mb-1">User Cost</p>
+                    <p className="text-xl font-bold text-blue-600">USD {selectedRequest.estimatedPriceUsd.toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-blue-900 font-semibold mb-1">Status</p>
@@ -442,29 +486,38 @@ export function AdminEnrichmentDashboard() {
                 )}
 
                 {/* Admin Actions */}
-                {selectedRequest.status !== "started" && (
-                  <div className="flex gap-3 pt-4 border-t border-zinc-200">
-                    <button
-                      onClick={() => setSelectedRequest(null)}
-                      className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-                    >
-                      Close
-                    </button>
-                    {selectedRequest.projectedPaidCalls > 0 && (
-                      <button
-                        onClick={() => void adminBypassStart(selectedRequest.requestId)}
-                        disabled={isLoading}
-                        className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 px-4 py-2 text-sm font-medium text-white transition-colors"
-                      >
-                        {isLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin mx-auto" />
-                        ) : (
-                          "Admin Bypass Start"
-                        )}
-                      </button>
+                <div className="flex gap-3 pt-4 border-t border-zinc-200">
+                  <button
+                    onClick={() => setSelectedRequest(null)}
+                    className="flex-1 rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => void deletePendingRequest(selectedRequest.requestId)}
+                    disabled={isLoading}
+                    className="flex-1 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-zinc-300 px-4 py-2 text-sm font-medium text-white transition-colors"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    ) : (
+                      "Delete Request"
                     )}
-                  </div>
-                )}
+                  </button>
+                  {isPendingRequest(selectedRequest.status) && selectedRequest.projectedPaidCalls > 0 && (
+                    <button
+                      onClick={() => void adminBypassStart(selectedRequest.requestId)}
+                      disabled={isLoading}
+                      className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 px-4 py-2 text-sm font-medium text-white transition-colors"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                      ) : (
+                        "Admin Bypass Start"
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>

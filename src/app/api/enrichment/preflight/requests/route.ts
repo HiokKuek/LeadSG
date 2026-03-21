@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
-import { buildPreflightEstimate, ssicListSchema } from "@/lib/enrichment";
+import {
+  buildPreflightEstimate,
+  estimateMaxCostUsd,
+  estimateUserChargeUsd,
+  ssicListSchema,
+} from "@/lib/enrichment";
 import { enrichmentPreflightRequests } from "@/lib/schema";
 import type { EnrichmentPreflightRequestResponse } from "@/lib/types";
 
@@ -34,6 +39,7 @@ function toResponse(row: {
     candidateCount: row.candidateCount,
     projectedPaidCalls: row.projectedPaidCalls,
     estimatedPriceUsd: row.estimatedPriceUsd / 100,
+    estimatedProviderCostUsd: estimateMaxCostUsd(row.projectedPaidCalls),
     paymentCodeId: row.paymentCodeId,
     issuedCode: row.issuedCode,
     requestedAt: row.requestedAt.toISOString(),
@@ -60,6 +66,34 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getDb();
+  const existingRequests = await db
+    .select({
+      id: enrichmentPreflightRequests.id,
+      ssicList: enrichmentPreflightRequests.ssicList,
+    })
+    .from(enrichmentPreflightRequests)
+    .where(eq(enrichmentPreflightRequests.userId, user.id));
+
+  const requestedSsicSet = new Set(parsed.data.ssicCodes);
+  const duplicateRequest = existingRequests.find((existing) =>
+    existing.ssicList.some((code) => requestedSsicSet.has(code)),
+  );
+
+  if (duplicateRequest) {
+    const duplicateCodes = Array.from(
+      new Set(duplicateRequest.ssicList.filter((code) => requestedSsicSet.has(code))),
+    );
+
+    return NextResponse.json(
+      {
+        error: `Duplicate SSIC request is not allowed. Overlapping SSIC: ${duplicateCodes.join(", ")}.`,
+        existingRequestId: duplicateRequest.id,
+        duplicateSsicCodes: duplicateCodes,
+      },
+      { status: 409 },
+    );
+  }
+
   const estimate = await buildPreflightEstimate(db, parsed.data.ssicCodes);
   const requestId = crypto.randomUUID();
 
@@ -73,7 +107,7 @@ export async function POST(request: NextRequest) {
       status: estimate.projectedPaidCalls === 0 ? "ready_to_start" : "requested",
       candidateCount: estimate.candidateCount,
       projectedPaidCalls: estimate.projectedPaidCalls,
-      estimatedPriceUsd: Math.round(estimate.projectedMaxCostUsd * 100),
+      estimatedPriceUsd: Math.round(estimateUserChargeUsd(estimate.candidateCount) * 100),
     })
     .returning({
       id: enrichmentPreflightRequests.id,

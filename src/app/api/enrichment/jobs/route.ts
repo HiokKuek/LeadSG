@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
 import {
+  estimateMaxCostUsd,
   preflightRequestIdSchema,
 } from "@/lib/enrichment";
 import { enrichmentJobs, enrichmentPreflightRequests, paymentCodes } from "@/lib/schema";
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest) {
 
   const jobId = crypto.randomUUID();
   const reservedPaidCalls = preflight.projectedPaidCalls;
-  const estimatedMaxCostUsdCents = preflight.estimatedPriceUsd;
+  const estimatedMaxCostUsdCents = Math.round(estimateMaxCostUsd(preflight.projectedPaidCalls) * 100);
 
   const job = await db.transaction(async (tx) => {
     if (paymentCodeForReservation && reservedPaidCalls > 0) {

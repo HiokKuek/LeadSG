@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
+import { estimateMaxCostUsd } from "@/lib/enrichment";
 import { enrichmentInternalQuota, enrichmentJobs, enrichmentPreflightRequests } from "@/lib/schema";
 import type { EnrichmentJobResponse } from "@/lib/types";
 
@@ -162,7 +163,7 @@ export async function POST(
           estimatedPaidCalls: preflight.projectedPaidCalls,
           reservedPaidCalls: preflight.projectedPaidCalls,
           consumedPaidCalls: 0,
-          estimatedMaxCostUsd: preflight.estimatedPriceUsd,
+          estimatedMaxCostUsd: Math.round(estimateMaxCostUsd(preflight.projectedPaidCalls) * 100),
         })
         .returning({
           id: enrichmentJobs.id,

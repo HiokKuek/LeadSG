@@ -15,13 +15,17 @@ export type EnrichmentPreflightResponse = {
   candidateCount: number;
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
+  estimatedProviderCostUsd: number;
 };
 
 export type EnrichmentPreflightRequestStatus =
   | "requested"
   | "code_issued"
   | "ready_to_start"
-  | "started";
+  | "started"
+  | "completed"
+  | "failed"
+  | "partial_stopped_budget";
 
 export type EnrichmentPreflightRequestResponse = {
   requestId: string;
@@ -32,6 +36,7 @@ export type EnrichmentPreflightRequestResponse = {
   candidateCount: number;
   projectedPaidCalls: number;
   estimatedPriceUsd: number;
+  estimatedProviderCostUsd: number;
   paymentCodeId: number | null;
   issuedCode: string | null;
   requestedAt: string;

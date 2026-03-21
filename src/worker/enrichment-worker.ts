@@ -9,6 +9,7 @@ import {
   enrichmentInternalQuota,
   enrichmentJobItems,
   enrichmentJobs,
+  enrichmentPreflightRequests,
   paymentCodes,
 } from "@/lib/schema";
 
@@ -46,6 +47,7 @@ function log(level: LogLevel, event: string, payload: Record<string, unknown> = 
 type ClaimedJob = {
   id: string;
   userId: string;
+  preflightRequestId: string | null;
   paymentCodeId: number | null;
   initiatedByAdmin: boolean;
   ssicList: string[];
@@ -113,6 +115,23 @@ async function releaseUnusedReservation(
   });
 }
 
+async function updatePreflightStatusForJob(
+  job: ClaimedJob,
+  status: "completed" | "partial_stopped_budget" | "failed",
+): Promise<void> {
+  if (!job.preflightRequestId) {
+    return;
+  }
+
+  await getDb()
+    .update(enrichmentPreflightRequests)
+    .set({
+      status,
+      updatedAt: new Date(),
+    })
+    .where(eq(enrichmentPreflightRequests.id, job.preflightRequestId));
+}
+
 async function claimNextJob(): Promise<ClaimedJob | null> {
   const db = getDb();
 
@@ -121,6 +140,7 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
       .select({
         id: enrichmentJobs.id,
         userId: enrichmentJobs.userId,
+        preflightRequestId: enrichmentJobs.preflightRequestId,
         paymentCodeId: enrichmentJobs.paymentCodeId,
         initiatedByAdmin: enrichmentJobs.initiatedByAdmin,
         ssicList: enrichmentJobs.ssicList,
@@ -221,6 +241,9 @@ async function processJob(job: ClaimedJob): Promise<void> {
       status: "completed",
       candidateCount: 0,
     });
+
+    await updatePreflightStatusForJob(job, "completed");
+    await releaseUnusedReservation(job, 0);
     return;
   }
 
@@ -523,6 +546,8 @@ async function processJob(job: ClaimedJob): Promise<void> {
     stopReason: partialStopped ? "BUDGET_EXHAUSTED" : null,
   });
 
+  await updatePreflightStatusForJob(job, finalStatus);
+
   await releaseUnusedReservation(job, consumedPaidCalls);
 }
 
@@ -543,6 +568,8 @@ async function processClaimedJob(job: ClaimedJob): Promise<void> {
         finishedAt: new Date(),
       })
       .where(eq(enrichmentJobs.id, job.id));
+
+    await updatePreflightStatusForJob(job, "failed");
 
     await releaseUnusedReservation(job, 0);
 

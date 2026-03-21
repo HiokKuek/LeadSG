@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getAuthenticatedUser } from "@/lib/enrichment-auth";
+import { estimateMaxCostUsd } from "@/lib/enrichment";
 import { enrichmentPreflightRequests, paymentCodes } from "@/lib/schema";
 import type { EnrichmentPreflightRequestResponse } from "@/lib/types";
 
@@ -33,6 +34,7 @@ function toResponse(row: {
     candidateCount: row.candidateCount,
     projectedPaidCalls: row.projectedPaidCalls,
     estimatedPriceUsd: row.estimatedPriceUsd / 100,
+    estimatedProviderCostUsd: estimateMaxCostUsd(row.projectedPaidCalls),
     paymentCodeId: row.paymentCodeId,
     issuedCode: row.issuedCode,
     requestedAt: row.requestedAt.toISOString(),
