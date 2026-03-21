@@ -31,7 +31,7 @@ export default async function Home() {
       {!userId && (
         <div className="mt-8 w-full max-w-2xl mx-auto text-center">
           <p className="text-base text-zinc-500 mb-4">
-            Sign up to unlock advanced features like contact enrichment and bulk data export.
+            Sign up to unlock advanced features like contact information and bulk data export.
           </p>
           <Link
             href="/sign-up"
