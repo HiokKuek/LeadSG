@@ -17,7 +17,7 @@ This project mirrors Singapore ACRA entity data into Postgres using a blue-green
 - Hardcoded ETL status filter `LIKE "Live"` (matches both `Live` and `Live Company`)
 - Persists ETL refresh timestamp in `etl_metadata.last_updated_at`
 - URL-synced search state with `nuqs` (`?ssic=62011`)
-- Server-side pagination (50 rows/page) with total match counts
+- Server-side pagination (10 rows/page) with total match counts
 - Frontend shows total live companies and last database update timestamp
 - Short-lived API + browser session caching for smoother paging
 - Weekly GitHub Actions ETL schedule
@@ -92,7 +92,7 @@ Optional GitHub Secrets (override script defaults if set):
 `GET /api/search?ssic=62011&page=1`
 
 - Validates `ssic` as exactly 5 digits
-- Returns paginated rows (`pageSize=50`) plus:
+- Returns paginated rows (`pageSize=10`) plus:
 	- `pagination.totalMatching`
 	- `totals.liveCompanies`
 	- `totals.lastUpdatedAt`

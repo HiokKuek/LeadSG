@@ -8,7 +8,7 @@ import type { EntitySearchResult } from "@/lib/types";
 
 const ssicSchema = z.string().regex(/^\d{5}$/);
 const pageSchema = z.coerce.number().int().min(1);
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 const RESPONSE_HEADERS = {
   "Cache-Control": "public, max-age=30, stale-while-revalidate=120",
 };

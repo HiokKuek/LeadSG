@@ -32,8 +32,9 @@ type SearchResponse = {
 const ssicParser = parseAsString.withDefault("");
 const pageParser = parseAsInteger.withDefault(1);
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const SEARCH_CACHE_PREFIX = "leadsg:search:";
-const SUMMARY_CACHE_KEY = "leadsg:summary";
+const CACHE_VERSION = "v2";
+const SEARCH_CACHE_PREFIX = `leadsg:${CACHE_VERSION}:search:`;
+const SUMMARY_CACHE_KEY = `leadsg:${CACHE_VERSION}:summary`;
 
 type CachedSearchPayload = {
   payload: SearchResponse;
@@ -88,7 +89,7 @@ export function SearchPanel() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [totalMatching, setTotalMatching] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);

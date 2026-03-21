@@ -18,6 +18,9 @@ export default async function Home() {
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900">
           LeadSG 📞
         </h1>
+        <p className="mt-3 text-base text-zinc-600 sm:text-lg">
+          Search for live companies with SSIC code.
+        </p>
       </header>
 
       <Suspense fallback={<SearchPanelFallback />}>
